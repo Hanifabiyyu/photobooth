@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avotobooth</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="top-bar">
+        <div class="logo">✨ Avotobooth ✨</div>
+        <div id="global-timer" class="timer-display hidden">Sisa Waktu: <span id="time-remaining">05:00</span></div>
+    </div>
+
+   <section id="screen-welcome" class="screen active">
+        <div class="content-box">
+            <h1>Halo! Selamat Datang</h1>
+            <p>Siap untuk membuat kenangan seru?</p>
+            
+            <div style="margin: 20px 0; padding: 15px; border: 2px dashed #ccc; border-radius: 10px; background: #f9f9f9;">
+                <p style="font-size: 0.9rem; margin-bottom: 5px;">⚙️ Admin: Upload Frame (PNG)</p>
+                <input type="file" accept="image/png" onchange="loadCustomFrame(this)">
+                <p id="frame-status" style="font-size: 0.8rem; color: green; margin-top: 5px;"></p>
+            </div>
+
+            <div class="filter-selection" style="margin-bottom: 20px;">
+                <p style="font-weight: bold; margin-bottom: 10px; color: var(--primary-btn);">Pilih Filter Warna:</p>
+                <label style="margin-right: 15px; cursor: pointer;">
+                    <input type="radio" name="filterMode" value="color" checked onchange="setFilterMode('color')"> 
+                    🌈 Berwarna
+                </label>
+                <label style="margin-right: 15px; cursor: pointer;">
+                    <input type="radio" name="filterMode" value="bnw" onchange="setFilterMode('bnw')"> 
+                    ⚫⚪ Hitam Putih (B&W)
+                </label>
+            </div>
+            <button class="btn-primary" onclick="startSession()">Mulai Foto 📸</button>
+        </div>
+    </section>
+
+    <section id="screen-template" class="screen">
+        <h2>Pilih Gaya Strip Kamu</h2>
+        <div class="template-options">
+            <div class="template-card" onclick="selectTemplate(3)">
+                <div class="mini-strip three-strip">
+                    <div></div><div></div><div></div>
+                </div>
+                <p>3 Foto</p>
+            </div>
+            <div class="template-card" onclick="selectTemplate(4)">
+                <div class="mini-strip four-strip">
+                    <div></div><div></div><div></div><div></div>
+                </div>
+                <p>4 Foto</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="screen-capture" class="screen">
+        <div class="camera-container">
+            <video id="video-feed" autoplay playsinline></video>
+            <div id="countdown-overlay" class="hidden">3</div>
+        </div>
+        <p id="photo-instruction">Bersiap...</p>
+        <canvas id="photo-canvas" style="display:none;"></canvas>
+    </section>
+
+    <section id="screen-preview" class="screen">
+        <h2>Preview Hasil</h2>
+        
+        <div id="preview-container">
+            <img id="preview-image" alt="Preview Strip">
+        </div>
+
+        <div class="retake-section">
+            <p>Kurang puas? Klik foto di bawah untuk mengulang satu per satu:</p>
+            <div id="thumbnails-container" class="thumbnails-row">
+                </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn-secondary" onclick="retakeAll()">Ulangi Semua 🔄</button>
+            <button class="btn-primary" onclick="finalizeSession()">Lanjut ke Cetak ✅</button>
+        </div>
+    </section>
+
+    <section id="screen-print" class="screen">
+        <h2>Siap Dicetak!</h2>
+        <p>Waktu tersisa untuk cetak: <span id="print-timer">03:00</span></p>
+        
+        <div class="print-preview-area">
+            <img id="final-image" alt="Final Strip">
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn-secondary" onclick="downloadImage()">Unduh ⬇️</button>
+            <button class="btn-primary" onclick="printImage()">Cetak 🖨️</button>
+        </div>
+        <button class="btn-text" onclick="finishSession()">Selesai</button>
+    </section>
+
+    <section id="screen-thankyou" class="screen">
+        <div class="content-box">
+            <h1>Terima Kasih! ✨</h1>
+            <p>Jangan lupa ambil fotomu ya!</p>
+            <button class="btn-primary" onclick="resetApp()">Foto Lagi?</button>
+        </div>
+    </section>
+
+    <script src="script.js"></script>
+</body>
+</html>

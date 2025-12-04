@@ -1,0 +1,264 @@
+:root {
+    --pastel-pink: #FFD1DC;
+    --pastel-blue: #C1E1FF;
+    --pastel-mint: #CBF0E0;
+    --pastel-yellow: #FEF9C3;
+    --dark-text: #555;
+    --primary-btn: #FF9AA2;
+    --primary-btn-hover: #FF6F7D;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Quicksand', sans-serif;
+    background-color: var(--pastel-mint);
+    color: var(--dark-text);
+    
+    /* PERBAIKAN 1: Izinkan Scroll */
+    min-height: 100vh; /* Minimal setinggi layar, tapi bisa lebih */
+    height: auto;      /* Tinggi menyesuaikan konten */
+    overflow-y: auto;  /* Aktifkan scroll vertikal */
+    overflow-x: hidden;
+    
+    /* Agar scroll smooth di iOS/iPad */
+    -webkit-overflow-scrolling: touch; 
+    
+    display: flex;
+    flex-direction: column;
+}
+
+h1, h2 {
+    font-family: 'Fredoka One', cursive;
+    color: #FF85A2;
+    margin-bottom: 1rem;
+}
+
+/* --- Layout --- */
+.top-bar {
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(5px);
+    position: sticky; /* Biar timer tetap terlihat saat scroll */
+    top: 0;
+    z-index: 100;
+}
+
+.screen {
+    /* PERBAIKAN 2: Flexbox yang aman */
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start; /* Mulai dari atas, bukan tengah paksa */
+    text-align: center;
+    padding: 20px;
+    padding-bottom: 80px; /* Ruang ekstra di bawah untuk tombol */
+    width: 100%;
+    animation: fadeIn 0.5s ease;
+}
+
+.screen.active {
+    display: flex;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Components --- */
+.content-box {
+    background: white;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    max-width: 90%;
+    margin-top: 20px;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 15px 30px;
+    border: none;
+    border-radius: 50px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 10px;
+    transition: transform 0.2s;
+    font-family: 'Quicksand', sans-serif;
+    /* Agar tombol mudah ditekan di layar sentuh */
+    touch-action: manipulation; 
+}
+
+.btn-primary { background-color: var(--primary-btn); color: white; }
+.btn-secondary { background-color: var(--pastel-blue); color: #444; }
+
+.btn-primary:active, .btn-secondary:active { transform: scale(0.95); }
+.btn-text { background: none; border: none; color: #666; text-decoration: underline; margin-top: 20px; cursor: pointer; }
+
+/* --- Template Selection --- */
+.template-options {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap; /* Agar turun ke bawah kalau layar sempit */
+    justify-content: center;
+}
+
+.template-card {
+    background: white;
+    padding: 20px;
+    border-radius: 15px;
+    cursor: pointer;
+    border: 3px solid transparent;
+    transition: transform 0.2s;
+}
+
+.template-card:hover { border-color: var(--primary-btn); transform: translateY(-5px); }
+
+.mini-strip { width: 60px; background: #eee; display: flex; flex-direction: column; padding: 5px; gap: 2px; margin-bottom: 10px; }
+.mini-strip div { background: #ccc; flex: 1; min-height: 20px; }
+
+/* --- Camera Container (UPDATE) --- */
+.camera-container {
+    position: relative;
+    width: 100%;
+    /* Hapus max-width jika ingin full di portrait, atau atur sesuai selera */
+    max-width: 100%; 
+    
+    /* Ganti aspect-ratio fix menjadi fleksibel atau set tinggi manual */
+    /* Untuk Portrait yang bagus, kita bisa set tinggi fix atau aspect ratio vertikal */
+    height: 60vh; /* Menggunakan 60% tinggi layar agar pas di Portrait & Landscape */
+    
+    border-radius: 20px;
+    overflow: hidden;
+    border: 5px solid white;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    background: #000;
+    margin: 0 auto; /* Tengah */
+}
+
+/* --- Video Feed (UPDATE ANTI-DISTORT) --- */
+#video-feed {
+    width: 100%;
+    height: 100%;
+    
+    /* INI KUNCINYA: */
+    object-fit: cover; /* Video akan mengisi kotak tanpa gepeng (crop otomatis) */
+    
+    display: block;
+    transform: scaleX(-1); /* Mirroring */
+}
+
+/* --- Responsive Khusus iPad Portrait --- */
+/* Media query untuk layar tablet dalam posisi berdiri */
+@media screen and (max-width: 1024px) and (orientation: portrait) {
+    .camera-container {
+        height: 50vh; /* Sesuaikan tinggi kamera di mode portrait */
+        width: 90%;   /* Lebar kamera */
+    }
+    
+    /* Sesuaikan tombol biar enak dipencet jempol */
+    .btn-primary, .btn-secondary {
+        padding: 20px;
+        font-size: 1.2rem;
+    }
+}
+#countdown-overlay {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    font-size: 5rem; color: white; font-family: 'Fredoka One', cursive; text-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+/* --- Preview & Print --- */
+#preview-container, .print-preview-area {
+    margin: 20px 0;
+    max-width: 100%;
+    overflow-x: auto; /* Bisa geser samping kalau gambar kegedean */
+}
+
+/* PERBAIKAN 3: Ukuran Gambar Responsif */
+#preview-image, #final-image {
+    max-width: 100%;     /* Tidak boleh lebih lebar dari layar */
+    max-height: 50vh;    /* Maksimal 50% tinggi layar agar tombol tidak hilang */
+    height: auto;
+    border: 1px solid #ddd;
+    box-shadow: 5px 5px 15px rgba(0,0,0,0.1);
+    display: block;
+    margin: 0 auto;      /* Tengah */
+}
+
+/* --- Retake Thumbnails --- */
+.retake-section { margin-top: 20px; width: 100%; max-width: 500px; }
+.thumbnails-row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.thumb-card {
+    position: relative; width: 70px; height: 50px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid #ddd;
+}
+.thumb-card img { width: 100%; height: 100%; object-fit: cover; }
+.thumb-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3);
+    display: flex; align-items: center; justify-content: center; opacity: 0;
+}
+.thumb-card:hover .thumb-overlay { opacity: 1; }
+.thumb-overlay span { font-size: 1.2rem; color: white; }
+
+.hidden { display: none !important; }
+
+/* --- RESPONSIVE IPAD / TABLET --- */
+@media screen and (max-width: 1024px) {
+    .content-box {
+        padding: 20px;
+        width: 95%;
+    }
+
+    h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.5rem; }
+
+    .btn-primary, .btn-secondary {
+        padding: 12px 20px;
+        font-size: 1rem;
+        width: 100%;     /* Tombol jadi lebar penuh biar gampang ditekan */
+        max-width: 300px;
+    }
+    
+    .action-buttons {
+        display: flex;
+        flex-direction: column; /* Tombol atas bawah di layar kecil */
+        align-items: center;
+        width: 100%;
+    }
+
+    /* Khusus Landscape: Perkecil gambar biar tombol naik */
+    @media (orientation: landscape) {
+        #preview-image, #final-image {
+            max-height: 40vh; 
+        }
+        .top-bar { padding: 5px 15px; }
+    }
+}
+
+/* --- PRINT STYLES --- */
+@media print {
+    body { 
+        background: white; 
+        height: auto; 
+        overflow: visible; 
+    }
+    body * { visibility: hidden; }
+    #screen-print, #screen-print * { visibility: visible; }
+    .top-bar, .action-buttons, h2, p, .btn-text, .retake-section { display: none !important; }
+    
+    #screen-print { 
+        position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; display: block; 
+    }
+    #final-image { 
+        width: 57mm; 
+        height: auto; 
+        max-height: none; /* Reset max-height saat print */
+        border: none; box-shadow: none; display: block; 
+    }
+}
