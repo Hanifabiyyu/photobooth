@@ -258,7 +258,7 @@ async function generateStrip() {
     const slotH_mm = 32.0625; 
     
     // Dimensi Jarak
-    const gap_mm = 8;
+    const gap_mm = 4;
     const topMargin_mm = 10;
     const bottomMargin_mm = 20;
     const padding_mm = 1; 
@@ -441,3 +441,4 @@ function resetApp() {
     capturedImages = [];
     showScreen('screen-welcome');
 }
+
