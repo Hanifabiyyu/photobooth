@@ -125,55 +125,56 @@ h1, h2 {
 .mini-strip div { background: #ccc; flex: 1; min-height: 20px; }
 
 /* --- Camera Container (UPDATE) --- */
+/* --- Camera Container (UPDATE: RASIO KAMERA ASLI) --- */
 .camera-container {
     position: relative;
     width: 100%;
-    /* Hapus max-width jika ingin full di portrait, atau atur sesuai selera */
-    max-width: 100%; 
+    max-width: 600px;
     
-    /* Ganti aspect-ratio fix menjadi fleksibel atau set tinggi manual */
-    /* Untuk Portrait yang bagus, kita bisa set tinggi fix atau aspect ratio vertikal */
-    height: 60vh; /* Menggunakan 60% tinggi layar agar pas di Portrait & Landscape */
+    /* Rasio iPad/Tablet umumnya 4:3. */
+    /* Ini membuat tampilan live view lebih lega/tinggi */
+    aspect-ratio: 4 / 3; 
     
     border-radius: 20px;
     overflow: hidden;
     border: 5px solid white;
     box-shadow: 0 10px 20px rgba(0,0,0,0.1);
     background: #000;
-    margin: 0 auto; /* Tengah */
+    margin: 0 auto;
 }
 
-/* --- Video Feed (UPDATE ANTI-DISTORT) --- */
 #video-feed {
     width: 100%;
     height: 100%;
-    
-    /* INI KUNCINYA: */
-    object-fit: cover; /* Video akan mengisi kotak tanpa gepeng (crop otomatis) */
-    
+    object-fit: cover; 
     display: block;
-    transform: scaleX(-1); /* Mirroring */
+    transform: scaleX(-1);
 }
 
-/* --- Responsive Khusus iPad Portrait --- */
-/* Media query untuk layar tablet dalam posisi berdiri */
-@media screen and (max-width: 1024px) and (orientation: portrait) {
-    .camera-container {
-        height: 50vh; /* Sesuaikan tinggi kamera di mode portrait */
-        width: 90%;   /* Lebar kamera */
-    }
-    
-    /* Sesuaikan tombol biar enak dipencet jempol */
-    .btn-primary, .btn-secondary {
-        padding: 20px;
-        font-size: 1.2rem;
-    }
-}
+
+/* Pastikan angka hitung mundur ada di paling atas */
+/* --- Overlay Hitung Mundur (3, 2, 1) --- */
 #countdown-overlay {
-    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    font-size: 5rem; color: white; font-family: 'Fredoka One', cursive; text-shadow: 0 0 10px rgba(0,0,0,0.5);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    
+    /* Style Teks */
+    font-size: 6rem; /* Ukuran besar */
+    color: white;
+    font-family: 'Fredoka One', cursive;
+    text-shadow: 0 0 15px rgba(0,0,0,0.8); /* Bayangan biar jelas */
+    
+    /* Pastikan dia paling atas (di atas guide dan video) */
+    z-index: 50; 
+    pointer-events: none; /* Agar tidak menghalangi klik */
 }
 
+/* Helper Class untuk menyembunyikan elemen */
+.hidden {
+    display: none !important;
+}
 /* --- Preview & Print --- */
 #preview-container, .print-preview-area {
     margin: 20px 0;
