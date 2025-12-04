@@ -441,5 +441,3 @@ function resetApp() {
     capturedImages = [];
     showScreen('screen-welcome');
 }
-
-
