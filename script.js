@@ -75,31 +75,10 @@ function startGlobalTimer(duration) {
     sessionTimerInterval = setInterval(() => {
         timer--;
         updateTimerDisplay(timer, timerDisplay);
-        
         if (timer <= 0) {
             clearInterval(sessionTimerInterval);
-            
-            // === LOGIKA BARU: JIKA WAKTU HABIS ===
-            
-            // Cek: Apakah pengguna sudah mengambil setidaknya 1 foto?
-            if (capturedImages.length > 0) {
-                alert("Waktu sesi habis! Mengarahkan ke halaman cetak...");
-                
-                // 1. Matikan kamera (jaga-jaga jika habisnya pas lagi foto)
-                stopCamera();
-                
-                // 2. Generate Strip Foto (dari foto yang sempat diambil)
-                // Walaupun fotonya belum lengkap (misal baru 2 dari 4), tetap akan digenerate.
-                generateStrip(); 
-                
-                // 3. Masuk ke halaman Print
-                finalizeSession(); 
-                
-            } else {
-                // Jika waktu habis TAPI belum sempat foto satu pun
-                alert("Waktu sesi habis dan belum ada foto.");
-                resetApp();
-            }
+            alert("Waktu sesi habis!");
+            resetApp();
         }
     }, 1000);
 }
@@ -255,7 +234,7 @@ async function generateStrip() {
     
     // Dimensi Slot/Area
     const slotW_mm = 57; 
-    const slotH_mm = 32.0625; 
+    const slotH_mm = 30; 
     
     // Dimensi Jarak
     const gap_mm = 8;
