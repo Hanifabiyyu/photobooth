@@ -204,59 +204,37 @@ function doCountdown() {
     });
 }
 
-// --- Modifikasi: captureFrame (Precision Crop + Filter Fix) ---
+// --- Modifikasi: captureFrame (Smart Crop) ---
 function captureFrame() {
-    // 1. Tentukan Rasio Target (57mm : 32mm approx)
-    const targetRatio = 57 / 32.0625; 
-
-    // 2. Ambil ukuran asli video
-    const videoW = videoElement.videoWidth;
-    const videoH = videoElement.videoHeight;
-    const videoRatio = videoW / videoH;
-
-    // 3. Hitung area crop (potong tengah)
-    let cropW, cropH, cropX, cropY;
-
-    if (videoRatio > targetRatio) {
-        // Video lebih lebar (crop kiri-kanan)
-        cropH = videoH;
-        cropW = videoH * targetRatio;
-        cropX = (videoW - cropW) / 2;
-        cropY = 0;
-    } else {
-        // Video lebih tinggi (crop atas-bawah)
-        cropW = videoW;
-        cropH = videoW / targetRatio;
-        cropX = 0;
-        cropY = (videoH - cropH) / 2;
-    }
-
-    // 4. Siapkan Canvas Resolusi Tinggi
-    canvas.width = 1000;
-    canvas.height = 1000 / targetRatio;
-
-    // 5. Mirroring
+    canvas.width = videoElement.videoWidth;
+    canvas.height = videoElement.videoHeight;
+    
+    // Mirroring
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
-
-    // 6. TERAPKAN FILTER (Gunakan save/restore agar aman)
-    ctx.save(); // Simpan state normal
     
+    // === TERAPKAN FILTER SEBELUM MENGGAMBAR ===
     if (isBnwMode) {
+        // Filter grayscale + sedikit kontras biar bagus
         ctx.filter = 'grayscale(100%) contrast(1.1)';
+    } else {
+        ctx.filter = 'none';
     }
 
-    // 7. Gambar hasil crop ke canvas
-    ctx.drawImage(
-        videoElement, 
-        cropX, cropY, cropW, cropH,     // Source Crop
-        0, 0, canvas.width, canvas.height // Destinasi Full Canvas
-    );
-
-    ctx.restore(); // Kembalikan ke normal (hapus filter)
+    // Gambar video ke canvas (filter akan diterapkan di sini)
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+    
+    // PENTING: Reset filter agar tidak mempengaruhi penggambaran lain nanti
+    ctx.filter = 'none'; 
 
     return canvas.toDataURL('image/png');
 }
+function stopCamera() {
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+    }
+}
+
 // --- Image Generation (The Logic) ---
 // --- Helper: Fungsi untuk memastikan gambar loading dulu ---
 const loadImage = (src) => {
@@ -271,12 +249,11 @@ const loadImage = (src) => {
 // --- Image Generation (YANG SUDAH DIPERBAIKI) ---
 // --- Modifikasi: generateStrip (Ukuran Presisi) ---
 // --- Modifikasi: generateStrip (Support Custom Frame PNG) ---
-// --- Modifikasi: generateStrip (Final Fix untuk Filter & Frame) ---
 async function generateStrip() {
     // 1. Konversi Satuan (mm ke px)
     const pxPerMm = 11.8;
     
-    // Dimensi Slot
+    // Dimensi Slot/Area
     const slotW_mm = 57; 
     const slotH_mm = 32.0625; 
     
@@ -286,7 +263,7 @@ async function generateStrip() {
     const bottomMargin_mm = 20;
     const padding_mm = 1; 
 
-    // Hitung Pixel
+    // Hitung Pixel Dasar
     const stripWidth = Math.round(slotW_mm * pxPerMm);   
     const slotHeight = Math.round(slotH_mm * pxPerMm);  
     const gap = Math.round(gap_mm * pxPerMm);             
@@ -294,7 +271,7 @@ async function generateStrip() {
     const footerHeight = Math.round(bottomMargin_mm * pxPerMm); 
     const paddingPx = Math.round(padding_mm * pxPerMm);
 
-    // Tinggi Total
+    // Hitung Tinggi Total Kanvas
     const totalHeight = headerHeight + (slotHeight * selectedTemplate) + (gap * (selectedTemplate - 1)) + footerHeight;
 
     canvas.width = stripWidth;
@@ -304,7 +281,7 @@ async function generateStrip() {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // 3. Header Text (Jika tidak ada frame)
+    // 3. Draw Header Text (Hanya jika TIDAK ada frame custom)
     if (!customFrameImg) {
         ctx.fillStyle = "#FF85A2"; 
         ctx.font = "bold 30px 'Fredoka One'";
@@ -319,6 +296,7 @@ async function generateStrip() {
         
         let currentY = headerHeight; 
         
+        // Ukuran Foto Sebenarnya (Slot dikurangi padding)
         const imgW = stripWidth - (paddingPx * 2); 
         const imgH = slotHeight - (paddingPx * 2);
 
@@ -326,19 +304,21 @@ async function generateStrip() {
             const drawX = paddingPx;
             const drawY = currentY + paddingPx;
 
-            // === FILTER LOGIC YANG LEBIH KUAT ===
-            ctx.save(); // Kunci state canvas
-
+            // === TERAPKAN FILTER (LAGI) SAAT MENYUSUN STRIP ===
+            // Ini memastikan foto di strip akhir sesuai mode yang dipilih
             if (isBnwMode) {
-                // Paksa filter lagi saat menggambar ke strip
                 ctx.filter = 'grayscale(100%) contrast(1.1)';
+            } else {
+                ctx.filter = 'none';
             }
 
-            // Draw Image
+            // Draw Image (Filter diterapkan di sini)
             ctx.drawImage(img, drawX, drawY, imgW, imgH);
 
-            ctx.restore(); // Lepaskan filter agar tidak bocor ke elemen lain
-
+            // PENTING: RESET FILTER SEGERA!
+            // Agar border hijau dan teks tidak ikut jadi hitam putih
+            ctx.filter = 'none'; 
+            
             // Draw Border Hijau (Hanya jika TIDAK ada frame custom)
             if (!customFrameImg) {
                 ctx.strokeStyle = "#CBF0E0"; 
@@ -348,12 +328,14 @@ async function generateStrip() {
             
             currentY += slotHeight + gap;
         });
-
         // 5. Draw Custom Frame OR Footer Text
         if (customFrameImg) {
+            // --- LOGIKA FRAME ---
             // Frame digambar menimpa seluruh kanvas
+            // Pastikan desain PNG kamu transparan di bagian foto!
             ctx.drawImage(customFrameImg, 0, 0, canvas.width, canvas.height);
         } else {
+            // --- LOGIKA DEFAULT ---
             ctx.textBaseline = "alphabetic"; 
             ctx.fillStyle = "#aaa";
             ctx.font = "15px 'Quicksand'";
@@ -368,7 +350,8 @@ async function generateStrip() {
     } catch (error) {
         console.error("Gagal memproses gambar:", error);
     }
-}// --- Fungsi Baru: Menampilkan Thumbnail untuk Edit ---
+}
+// --- Fungsi Baru: Menampilkan Thumbnail untuk Edit ---
 function renderRetakeThumbnails() {
     const container = document.getElementById('thumbnails-container');
     container.innerHTML = ''; // Bersihkan isi lama
@@ -458,4 +441,3 @@ function resetApp() {
     capturedImages = [];
     showScreen('screen-welcome');
 }
-
