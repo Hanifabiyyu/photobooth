@@ -234,7 +234,7 @@ async function generateStrip() {
     
     // Dimensi Slot/Area
     const slotW_mm = 57; 
-    const slotH_mm = 30; 
+    const slotH_mm = 40; 
     
     // Dimensi Jarak
     const gap_mm = 8;
@@ -419,4 +419,5 @@ function resetApp() {
     currentScreen = 'screen-welcome';
     capturedImages = [];
     showScreen('screen-welcome');
+
 }
