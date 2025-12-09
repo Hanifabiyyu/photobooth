@@ -2,20 +2,34 @@
 let currentScreen = 'screen-welcome';
 let sessionTimerInterval;
 let printTimerInterval;
-let retakeIndex = null; // Menyimpan index foto mana yang sedang diulang
+let retakeIndex = null; 
 let capturedImages = [];
-let selectedTemplate = 3; // 3 or 4
+let selectedTemplate = 3; // 1 (Polaroid), 3, atau 4
 let videoStream = null;
-let customFrameImg = null; // Variabel untuk menyimpan frame
+let customFrameImg = null; 
 let isBnwMode = false;
+
 // --- Config ---
 const CONFIG = {
-    sessionTime: 5 * 60, // 5 menit
-    printTime: 3 * 60,   // 3 menit
-    countDownTime: 5,    // 5 detik per foto
-    printWidth: 57,      // mm
-    photoHeight: 30      // mm per foto
+    sessionTime: 5 * 60, 
+    printTime: 3 * 60,   
+    countDownTime: 5,    
+    
+    // Config Strip Biasa
+    printWidth: 57,      
+    photoHeight: 30,
+
+    // Config Polaroid (Instax Mini Standard)
+    polaroidWidth: 54,   // mm
+    polaroidHeight: 86,  // mm
+    polaroidImgW: 46,    // mm (Lebar foto di dalam polaroid)
+    polaroidImgH: 62     // mm (Tinggi foto di dalam polaroid)
 };
+
+// Variabel penampung hasil scan
+let detectedTemplates1 = []; // Untuk Polaroid
+let detectedTemplates3 = [];
+let detectedTemplates4 = [];
 
 // --- DOM Elements ---
 const screens = document.querySelectorAll('.screen');
@@ -29,44 +43,470 @@ const previewImage = document.getElementById('preview-image');
 const finalImage = document.getElementById('final-image');
 const printTimerDisplay = document.getElementById('print-timer');
 
-// --- Navigation ---
-function showScreen(screenId) {
-    screens.forEach(s => s.classList.remove('active'));
-    document.getElementById(screenId).classList.add('active');
-    currentScreen = screenId;
+// --- AUTO SCANNER ---
+function initAutoScan() {
+    scanFiles('1', 1, detectedTemplates1); // Scan Polaroid (1_1.png)
+    scanFiles('3', 1, detectedTemplates3); // Scan 3 Strip
+    scanFiles('4', 1, detectedTemplates4); // Scan 4 Strip
 }
 
-//Upload
-function loadCustomFrame(input) {
+function scanFiles(type, index, targetArray) {
+    const filename = `${type}_${index}.png`; 
+    const path = `assets/${filename}`;
+    const img = new Image();
+    
+    img.onload = function() {
+        targetArray.push(filename); 
+        scanFiles(type, index + 1, targetArray); 
+    };
+    img.onerror = function() {
+        console.log(`Scan tipe ${type} selesai. Total: ${targetArray.length}`);
+    };
+    img.src = path;
+}
+initAutoScan();
+
+// --- Navigation ---
+function showScreen(screenId) {
+    const allScreens = document.querySelectorAll('.screen');
+    allScreens.forEach(s => s.classList.remove('active'));
+    const target = document.getElementById(screenId);
+    if (target) {
+        target.classList.add('active');
+        currentScreen = screenId;
+    }
+}
+
+// --- Filter Logic ---
+function setFilterMode(mode) {
+    isBnwMode = (mode === 'bnw');
+}
+
+// --- FLOW APLIKASI ---
+function startSession() {
+    startGlobalTimer(CONFIG.sessionTime);
+    globalTimerBox.classList.remove('hidden');
+    showScreen('screen-strip-select');
+}
+
+function selectStripCount(num) {
+    selectedTemplate = num;
+    customFrameImg = null;
+    renderTemplateGallery(num);
+    showScreen('screen-template-choice');
+}
+
+// 3. Render Galeri (Update: Ada Tombol Default)
+function renderTemplateGallery(num) {
+    const galleryContainer = document.getElementById('assets-gallery');
+    galleryContainer.innerHTML = ''; 
+
+    // --- 1. BUAT TOMBOL DEFAULT (TANPA FRAME) ---
+    const defaultItem = document.createElement('div');
+    defaultItem.className = 'gallery-item';
+    defaultItem.onclick = () => {
+        customFrameImg = null; // Set null agar pakai desain bawaan kode
+        startCameraSequence();
+    };
+
+    // Styling visual kotak "Default"
+    defaultItem.innerHTML = `
+        <div style="
+            width: 100px; 
+            height: ${num === 1 ? '140px' : '100px'}; /* Polaroid lebih tinggi */
+            background: #f0f0f0; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            border-radius: 5px; 
+            border: 2px dashed #ccc;
+            color: #666;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-align: center;
+        ">
+            <span style="font-size: 1.5rem; margin-bottom: 5px;">✨</span>
+            Default<br>(Polos)
+        </div>
+    `;
+    galleryContainer.appendChild(defaultItem);
+
+
+    // --- 2. TAMPILKAN ASET DARI FOLDER (JIKA ADA) ---
+    // Ambil data dari hasil scan sesuai jumlah strip
+    let list;
+    if (num === 1) list = detectedTemplates1;
+    else if (num === 3) list = detectedTemplates3;
+    else list = detectedTemplates4;
+
+    // Jika ada file template di folder assets, tampilkan setelah tombol default
+    if (list.length > 0) {
+        list.forEach(filename => {
+            const div = document.createElement('div');
+            div.className = 'gallery-item';
+            div.onclick = () => loadPremadeFrame('assets/' + filename);
+
+            const img = document.createElement('img');
+            img.src = 'assets/' + filename;
+            
+            // Styling thumbnail agar rapi
+            img.style.width = '100px'; 
+            img.style.height = 'auto';
+            img.style.borderRadius = '5px';
+            img.style.objectFit = 'contain';
+            
+            div.appendChild(img);
+            galleryContainer.appendChild(div);
+        });
+    }
+}
+function loadPremadeFrame(path) {
+    const img = new Image();
+    img.onload = () => {
+        customFrameImg = img;
+        startCameraSequence();
+    };
+    img.onerror = () => alert("Gagal memuat template.");
+    img.src = path;
+}
+
+function handleCustomUpload(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
         reader.onload = function(e) {
             const img = new Image();
             img.onload = () => {
                 customFrameImg = img;
-                document.getElementById('frame-status').innerText = "✅ Frame berhasil dimuat!";
+                startCameraSequence();
             };
             img.src = e.target.result;
         };
         reader.readAsDataURL(input.files[0]);
     }
 }
-// Fungsi untuk mengubah mode filter berdasarkan pilihan radio button
-function setFilterMode(mode) {
-    isBnwMode = (mode === 'bnw');
-    // Opsional: Kita bisa langsung mengubah style video feed di sini jika kamera sudah nyala,
-    // tapi karena ini di halaman depan, efeknya baru terasa nanti saat startCamera().
-    if (videoElement.srcObject) {
-         videoElement.style.filter = isBnwMode ? 'grayscale(100%) contrast(1.1)' : 'none';
-    }
-}
-// --- Session Logic ---
-function startSession() {
-    startGlobalTimer(CONFIG.sessionTime);
-    globalTimerBox.classList.remove('hidden');
-    showScreen('screen-template');
+
+function startCameraSequence() {
+    capturedImages = [];
+    retakeIndex = null;
+    showScreen('screen-capture');
+    startCamera();
 }
 
+// --- Camera Logic ---
+async function startCamera() {
+    try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, 
+            audio: false 
+        });
+        videoElement.srcObject = videoStream;
+        videoElement.style.filter = isBnwMode ? 'grayscale(100%) contrast(1.1)' : 'none';
+        
+        // Update Crop Guide Visual di Layar
+        updateCropGuideVisual();
+
+        setTimeout(() => runPhotoSequence(), 1000);
+    } catch (err) {
+        alert("Gagal kamera: " + err);
+    }
+}
+
+// Fungsi Baru: Mengubah bentuk guide di layar (Landscape vs Portrait)
+function updateCropGuideVisual() {
+    const guide = document.querySelector('.crop-guide');
+    if (selectedTemplate === 1) {
+        // Mode Polaroid (Portrait 46x62 mm)
+        guide.style.aspectRatio = `${CONFIG.polaroidImgW} / ${CONFIG.polaroidImgH}`;
+    } else {
+        // Mode Strip (Landscape 57x30 mm)
+        guide.style.aspectRatio = `${CONFIG.printWidth} / ${CONFIG.photoHeight}`;
+    }
+}
+
+async function runPhotoSequence() {
+    const totalPhotos = selectedTemplate; // 1, 3, atau 4
+
+    if (retakeIndex !== null) {
+        document.getElementById('photo-instruction').innerText = `Mengulang Foto`;
+        await doCountdown();
+        triggerShutterEffect();
+        capturedImages[retakeIndex] = captureFrame(); 
+        retakeIndex = null; 
+    } else {
+        capturedImages = []; 
+        for (let i = 1; i <= totalPhotos; i++) {
+            document.getElementById('photo-instruction').innerText = `Foto ke-${i} dari ${totalPhotos}`;
+            await doCountdown();
+            triggerShutterEffect();
+            capturedImages.push(captureFrame());
+            
+            if(i < totalPhotos) await new Promise(r => setTimeout(r, 1000));
+        }
+    }
+
+    stopCamera();
+    await generateStrip(); 
+    renderRetakeThumbnails();
+    showScreen('screen-preview');
+}
+
+function triggerShutterEffect() {
+    playSound('snd-shutter');
+    videoElement.style.opacity = 0;
+    setTimeout(() => videoElement.style.opacity = 1, 100);
+}
+
+function doCountdown() {
+    return new Promise(resolve => {
+        let count = CONFIG.countDownTime;
+        countdownOverlay.classList.remove('hidden');
+        countdownOverlay.innerText = count;
+        playSound('snd-beep');
+
+        const interval = setInterval(() => {
+            count--;
+            if (count > 0) {
+                countdownOverlay.innerText = count;
+                playSound('snd-beep');
+            } else {
+                clearInterval(interval);
+                countdownOverlay.classList.add('hidden');
+                resolve();
+            }
+        }, 1000);
+    });
+}
+
+// --- Capture Frame (Dynamic Ratio) ---
+function captureFrame() {
+    // Tentukan target rasio berdasarkan mode
+    let targetRatio;
+    if (selectedTemplate === 1) {
+        // Polaroid (Portrait)
+        targetRatio = CONFIG.polaroidImgW / CONFIG.polaroidImgH; 
+    } else {
+        // Strip (Landscape)
+        targetRatio = CONFIG.printWidth / CONFIG.photoHeight;
+    }
+
+    const videoW = videoElement.videoWidth;
+    const videoH = videoElement.videoHeight;
+    const videoRatio = videoW / videoH;
+
+    let cropW, cropH, cropX, cropY;
+
+    if (videoRatio > targetRatio) {
+        cropH = videoH;
+        cropW = videoH * targetRatio;
+        cropX = (videoW - cropW) / 2;
+        cropY = 0;
+    } else {
+        cropW = videoW;
+        cropH = videoW / targetRatio;
+        cropX = 0;
+        cropY = (videoH - cropH) / 2;
+    }
+
+    canvas.width = 1000;
+    canvas.height = 1000 / targetRatio;
+
+    // Mirroring
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+
+    ctx.save(); 
+    if (isBnwMode) ctx.filter = 'grayscale(100%) contrast(1.1)';
+    
+    ctx.drawImage(videoElement, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+    
+    ctx.restore(); 
+    return canvas.toDataURL('image/png');
+}
+
+function stopCamera() {
+    if (videoStream) {
+        videoStream.getTracks().forEach(track => track.stop());
+    }
+}
+
+// --- Modifikasi: generateStrip (Default Template Polaroid Cantik) ---
+async function generateStrip() {
+    const pxPerMm = 11.8;
+    
+    // --- 1. SETTING UKURAN KANVAS ---
+    let canvasW, canvasH;
+
+    if (selectedTemplate === 1) {
+        // Ukuran Polaroid (54x86 mm)
+        canvasW = Math.round(CONFIG.polaroidWidth * pxPerMm);
+        canvasH = Math.round(CONFIG.polaroidHeight * pxPerMm);
+    } else {
+        // Ukuran Strip (Lebar 57mm, Tinggi Dinamis)
+        const gap = Math.round(8 * pxPerMm);
+        const header = Math.round(10 * pxPerMm);
+        const footer = Math.round(20 * pxPerMm);
+        const photoH = Math.round(CONFIG.photoHeight * pxPerMm);
+        
+        canvasW = Math.round(CONFIG.printWidth * pxPerMm);
+        canvasH = header + (photoH * selectedTemplate) + (gap * (selectedTemplate - 1)) + footer;
+    }
+
+    canvas.width = canvasW;
+    canvas.height = canvasH;
+
+    // Background Putih (Khas Polaroid)
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    try {
+        const loadedImages = await Promise.all(capturedImages.map(src => loadImage(src)));
+
+        // --- 2. MENGGAMBAR FOTO ---
+        if (selectedTemplate === 1) {
+            // === LOGIKA POLAROID ===
+            const imgW = CONFIG.polaroidImgW * pxPerMm;
+            const imgH = CONFIG.polaroidImgH * pxPerMm;
+            
+            // Posisi Foto: Centered horizontal, Top margin 4mm (standar instax)
+            const marginX = (canvasW - imgW) / 2;
+            const marginY = 4 * pxPerMm; 
+
+            if (loadedImages[0]) {
+                drawImageWithFilter(loadedImages[0], marginX, marginY, imgW, imgH);
+                
+                // Efek Bayangan Halus di dalam foto (Biar lebih realistis)
+                if (!customFrameImg) {
+                    ctx.strokeStyle = "rgba(0,0,0,0.1)"; // Abu-abu sangat tipis
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(marginX, marginY, imgW, imgH);
+                }
+            }
+
+        } else {
+            // === LOGIKA STRIP (3 / 4 Foto) ===
+            const paddingPx = Math.round(1 * pxPerMm); // Padding 1mm
+            const imgW = canvasW - (paddingPx * 2);
+            const imgH = Math.round(CONFIG.photoHeight * pxPerMm) - (paddingPx * 2);
+            const gap = Math.round(8 * pxPerMm);
+            let currentY = Math.round(10 * pxPerMm); // Top Margin
+
+            // Header Teks (jika no frame)
+            if (!customFrameImg) {
+                ctx.fillStyle = "#FF85A2"; 
+                ctx.font = "bold 30px 'Fredoka One'";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle"; 
+                ctx.fillText("Avotobooth ✨", canvasW / 2, currentY / 2);
+            }
+
+            loadedImages.forEach((img) => {
+                const drawX = paddingPx;
+                const drawY = currentY + paddingPx;
+                
+                drawImageWithFilter(img, drawX, drawY, imgW, imgH);
+
+                if (!customFrameImg) {
+                    ctx.strokeStyle = "#CBF0E0"; 
+                    ctx.lineWidth = 5;
+                    ctx.strokeRect(drawX, drawY, imgW, imgH);
+                }
+                currentY += Math.round(CONFIG.photoHeight * pxPerMm) + gap;
+            });
+        }
+
+        // --- 3. OVERLAY FRAME / FOOTER TEXT ---
+        if (customFrameImg) {
+            // Jika ada template custom, timpa semuanya
+            ctx.drawImage(customFrameImg, 0, 0, canvas.width, canvas.height);
+        } else {
+            // === DEFAULT TEMPLATE GENERATOR ===
+            ctx.textAlign = "center";
+            ctx.textBaseline = "alphabetic"; 
+            
+            if (selectedTemplate === 1) {
+                // >> TEMPLATE DEFAULT POLAROID <<
+                // Area bawah polaroid (Height 86mm - PhotoEnd 66mm = 20mm Space)
+                
+                // 1. Nama Brand (Lebih Besar)
+               // ctx.fillStyle = "#FF85A2"; // Warna Pink Pastel
+                //ctx.font = "bold 24px 'Fredoka One'";
+                // Posisi: Sekitar 12mm dari bawah
+                //ctx.fillText("Avotobooth ✨", canvasW / 2, canvasH - (12 * pxPerMm));
+                
+                // ... kode sebelumnya ...
+
+// 2. Tanggal (Kecil di bawahnya)
+        ctx.fillStyle = "#000000ff"; 
+        // Pastikan tetap pakai font typewriter pilihan Anda
+        ctx.font = "24px 'Courier New', Courier, monospace";
+
+        // --- LOGIKA FORMAT TANGGAL CUSTOM ---
+        const now = new Date();
+        const tgl = now.getDate(); // Ambil tanggal (misal: 9)
+        const bln = now.toLocaleDateString('id-ID', { month: 'short' }); // Ambil bulan pendek (misal: Des)
+        const thn = now.getFullYear().toString().slice(-2); // Ambil 2 digit terakhir tahun (misal: 25)
+
+        // Gabungkan menjadi string: "9 Des '25"
+        const tanggalCustom = `${tgl} ${bln} '${thn}`; 
+        // ------------------------------------
+
+        // Posisi: Sekitar 5mm dari bawah
+        ctx.fillText(tanggalCustom, canvasW / 2, canvasH - (5 * pxPerMm));
+
+    } else {
+        // >> TEMPLATE DEFAULT STRIP <<
+        
+        // 1. Warna Disamakan (Hitam)
+        ctx.fillStyle = "#000000ff";
+        
+        // 2. Font Disamakan (Typewriter 24px)
+        ctx.font = "24px 'Courier New', Courier, monospace";
+        
+        // 3. Logika Format Tanggal Disamakan
+        const now = new Date();
+        const tgl = now.getDate();
+        const bln = now.toLocaleDateString('id-ID', { month: 'short' });
+        const thn = now.getFullYear().toString().slice(-2);
+        const tanggalCustom = `${tgl} ${bln} '${thn}`;
+
+        // 4. Posisi Disamakan (5mm dari bawah)
+        // Sebelumnya 10mm, sekarang disamakan jadi 5mm agar seragam
+        ctx.fillText(tanggalCustom, canvasW / 2, canvasH - (5 * pxPerMm));
+    }
+}
+
+// Update Preview
+const finalDataUrl = canvas.toDataURL('image/png');
+previewImage.src = finalDataUrl;
+finalImage.src = finalDataUrl;
+
+} catch (error) {
+    console.error("Generate error:", error);
+}
+}
+// Helper Draw agar Filter Aman
+function drawImageWithFilter(img, x, y, w, h) {
+    ctx.save();
+    if (isBnwMode) ctx.filter = 'grayscale(100%) contrast(1.1)';
+    ctx.drawImage(img, x, y, w, h);
+    ctx.restore();
+}
+
+// --- Helpers Lain ---
+const loadImage = (src) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+});
+
+function playSound(id) {
+    const audio = document.getElementById(id);
+    if(audio) { audio.currentTime=0; audio.play().catch(e=>{}); }
+}
+
+// --- Timer & Output ---
 function startGlobalTimer(duration) {
     clearInterval(sessionTimerInterval);
     let timer = duration;
@@ -75,29 +515,15 @@ function startGlobalTimer(duration) {
     sessionTimerInterval = setInterval(() => {
         timer--;
         updateTimerDisplay(timer, timerDisplay);
-        
         if (timer <= 0) {
             clearInterval(sessionTimerInterval);
-            
-            // === LOGIKA BARU: JIKA WAKTU HABIS ===
-            
-            // Cek: Apakah pengguna sudah mengambil setidaknya 1 foto?
             if (capturedImages.length > 0) {
-                alert("Waktu sesi habis! Mengarahkan ke halaman cetak...");
-                
-                // 1. Matikan kamera (jaga-jaga jika habisnya pas lagi foto)
+                alert("Waktu habis! Mencetak...");
                 stopCamera();
-                
-                // 2. Generate Strip Foto (dari foto yang sempat diambil)
-                // Walaupun fotonya belum lengkap (misal baru 2 dari 4), tetap akan digenerate.
-                generateStrip(); 
-                
-                // 3. Masuk ke halaman Print
-                finalizeSession(); 
-                
+                generateStrip();
+                finalizeSession();
             } else {
-                // Jika waktu habis TAPI belum sempat foto satu pun
-                alert("Waktu sesi habis dan belum ada foto.");
+                alert("Waktu habis.");
                 resetApp();
             }
         }
@@ -110,296 +536,34 @@ function updateTimerDisplay(seconds, element) {
     element.textContent = `${m}:${s}`;
 }
 
-// --- Template & Camera ---
-function selectTemplate(num) {
-    selectedTemplate = num;
-    capturedImages = []; // Reset foto
-    showScreen('screen-capture');
-    startCamera();
-}
-
-// --- Camera & Capture Logic (UPDATE FILTER) ---
-async function startCamera() {
-    try {
-        videoStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } }, 
-            audio: false 
-        });
-        videoElement.srcObject = videoStream;
-
-        // TERAPKAN FILTER KE LIVE VIDEO FEED
-        // Tambahkan contrast sedikit agar B&W lebih tajam
-        videoElement.style.filter = isBnwMode ? 'grayscale(100%) contrast(1.1)' : 'none';
-
-        setTimeout(() => runPhotoSequence(), 1000);
-    } catch (err) {
-        alert("Gagal mengakses kamera: " + err);
-    }
-}
-
-async function runPhotoSequence() {
-    // Cek apakah ini mode retake (hanya 1 foto) atau sesi baru (looping)
-    if (retakeIndex !== null) {
-        // --- MODE RETAKE SATU FOTO ---
-        document.getElementById('photo-instruction').innerText = `Mengulang Foto ke-${retakeIndex + 1}`;
-        
-        await doCountdown();
-        
-        // Flash effect
-        videoElement.style.opacity = 0;
-        setTimeout(() => videoElement.style.opacity = 1, 100);
-
-        // Capture & Replace
-        const imgData = captureFrame();
-        capturedImages[retakeIndex] = imgData; // Timpa foto lama di posisi index tersebut
-        
-        // Reset index retake
-        retakeIndex = null; 
-
-    } else {
-        // --- MODE SESI BARU (Looping 3/4 foto) ---
-        capturedImages = []; // Kosongkan array
-        for (let i = 1; i <= selectedTemplate; i++) {
-            document.getElementById('photo-instruction').innerText = `Foto ke-${i} dari ${selectedTemplate}`;
-            
-            await doCountdown();
-            
-            videoElement.style.opacity = 0;
-            setTimeout(() => videoElement.style.opacity = 1, 100);
-
-            const imgData = captureFrame();
-            capturedImages.push(imgData);
-            
-            if(i < selectedTemplate) await new Promise(r => setTimeout(r, 1000));
-        }
-    }
-
-    // --- SELESAI FOTO ---
-    stopCamera();
-    
-    // Generate ulang strip foto
-    await generateStrip(); 
-    
-    // Render tombol-tombol thumbnail untuk edit
-    renderRetakeThumbnails();
-    
-    showScreen('screen-preview');
-}
-function doCountdown() {
-    return new Promise(resolve => {
-        let count = CONFIG.countDownTime;
-        countdownOverlay.classList.remove('hidden');
-        countdownOverlay.innerText = count;
-
-        const interval = setInterval(() => {
-            count--;
-            if (count > 0) {
-                countdownOverlay.innerText = count;
-            } else {
-                clearInterval(interval);
-                countdownOverlay.classList.add('hidden');
-                resolve();
-            }
-        }, 1000);
-    });
-}
-
-// --- Modifikasi: captureFrame (Smart Crop) ---
-function captureFrame() {
-    canvas.width = videoElement.videoWidth;
-    canvas.height = videoElement.videoHeight;
-    
-    // Mirroring
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    
-    // === TERAPKAN FILTER SEBELUM MENGGAMBAR ===
-    if (isBnwMode) {
-        // Filter grayscale + sedikit kontras biar bagus
-        ctx.filter = 'grayscale(100%) contrast(1.1)';
-    } else {
-        ctx.filter = 'none';
-    }
-
-    // Gambar video ke canvas (filter akan diterapkan di sini)
-    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-    
-    // PENTING: Reset filter agar tidak mempengaruhi penggambaran lain nanti
-    ctx.filter = 'none'; 
-
-    return canvas.toDataURL('image/png');
-}
-function stopCamera() {
-    if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-    }
-}
-
-// --- Image Generation (The Logic) ---
-// --- Helper: Fungsi untuk memastikan gambar loading dulu ---
-const loadImage = (src) => {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img); // Lanjut kalau gambar siap
-        img.onerror = reject;
-        img.src = src;
-    });
-};
-
-// --- Image Generation (YANG SUDAH DIPERBAIKI) ---
-// --- Modifikasi: generateStrip (Ukuran Presisi) ---
-// --- Modifikasi: generateStrip (Support Custom Frame PNG) ---
-async function generateStrip() {
-    // 1. Konversi Satuan (mm ke px)
-    const pxPerMm = 11.8;
-    
-    // Dimensi Slot/Area
-    const slotW_mm = 57; 
-    const slotH_mm = 32.0625; 
-    
-    // Dimensi Jarak
-    const gap_mm = 8;
-    const topMargin_mm = 10;
-    const bottomMargin_mm = 20;
-    const padding_mm = 1; 
-
-    // Hitung Pixel Dasar
-    const stripWidth = Math.round(slotW_mm * pxPerMm);   
-    const slotHeight = Math.round(slotH_mm * pxPerMm);  
-    const gap = Math.round(gap_mm * pxPerMm);             
-    const headerHeight = Math.round(topMargin_mm * pxPerMm); 
-    const footerHeight = Math.round(bottomMargin_mm * pxPerMm); 
-    const paddingPx = Math.round(padding_mm * pxPerMm);
-
-    // Hitung Tinggi Total Kanvas
-    const totalHeight = headerHeight + (slotHeight * selectedTemplate) + (gap * (selectedTemplate - 1)) + footerHeight;
-
-    canvas.width = stripWidth;
-    canvas.height = totalHeight;
-
-    // 2. Background Putih
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // 3. Draw Header Text (Hanya jika TIDAK ada frame custom)
-    if (!customFrameImg) {
-        ctx.fillStyle = "#FF85A2"; 
-        ctx.font = "bold 30px 'Fredoka One'";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle"; 
-        ctx.fillText("FotoSeru ✨", stripWidth / 2, headerHeight / 2);
-    }
-
-    // 4. Draw Photos
-    try {
-        const loadedImages = await Promise.all(capturedImages.map(src => loadImage(src)));
-        
-        let currentY = headerHeight; 
-        
-        // Ukuran Foto Sebenarnya (Slot dikurangi padding)
-        const imgW = stripWidth - (paddingPx * 2); 
-        const imgH = slotHeight - (paddingPx * 2);
-
-        loadedImages.forEach((img) => {
-            const drawX = paddingPx;
-            const drawY = currentY + paddingPx;
-
-            // === TERAPKAN FILTER (LAGI) SAAT MENYUSUN STRIP ===
-            // Ini memastikan foto di strip akhir sesuai mode yang dipilih
-            if (isBnwMode) {
-                ctx.filter = 'grayscale(100%) contrast(1.1)';
-            } else {
-                ctx.filter = 'none';
-            }
-
-            // Draw Image (Filter diterapkan di sini)
-            ctx.drawImage(img, drawX, drawY, imgW, imgH);
-
-            // PENTING: RESET FILTER SEGERA!
-            // Agar border hijau dan teks tidak ikut jadi hitam putih
-            ctx.filter = 'none'; 
-            
-            // Draw Border Hijau (Hanya jika TIDAK ada frame custom)
-            if (!customFrameImg) {
-                ctx.strokeStyle = "#CBF0E0"; 
-                ctx.lineWidth = 5;
-                ctx.strokeRect(drawX, drawY, imgW, imgH);
-            }
-            
-            currentY += slotHeight + gap;
-        });
-        // 5. Draw Custom Frame OR Footer Text
-        if (customFrameImg) {
-            // --- LOGIKA FRAME ---
-            // Frame digambar menimpa seluruh kanvas
-            // Pastikan desain PNG kamu transparan di bagian foto!
-            ctx.drawImage(customFrameImg, 0, 0, canvas.width, canvas.height);
-        } else {
-            // --- LOGIKA DEFAULT ---
-            ctx.textBaseline = "alphabetic"; 
-            ctx.fillStyle = "#aaa";
-            ctx.font = "15px 'Quicksand'";
-            ctx.fillText(new Date().toLocaleDateString('id-ID'), stripWidth / 2, totalHeight - (footerHeight / 2));
-        }
-
-        // Update Preview
-        const finalDataUrl = canvas.toDataURL('image/png');
-        previewImage.src = finalDataUrl;
-        finalImage.src = finalDataUrl;
-
-    } catch (error) {
-        console.error("Gagal memproses gambar:", error);
-    }
-}
-// --- Fungsi Baru: Menampilkan Thumbnail untuk Edit ---
 function renderRetakeThumbnails() {
     const container = document.getElementById('thumbnails-container');
-    container.innerHTML = ''; // Bersihkan isi lama
-
+    container.innerHTML = ''; 
     capturedImages.forEach((imgSrc, index) => {
-        // Buat elemen card
         const card = document.createElement('div');
         card.className = 'thumb-card';
-        card.onclick = () => initRetakeSingle(index); // Fungsi saat diklik
-
-        // Masukkan gambar
+        card.onclick = () => initRetakeSingle(index); 
         const img = document.createElement('img');
         img.src = imgSrc;
-        
-        // Masukkan overlay icon
-        const overlay = document.createElement('div');
-        overlay.className = 'thumb-overlay';
-        overlay.innerHTML = '<span>🔄</span>'; // Icon refresh
-
         card.appendChild(img);
-        card.appendChild(overlay);
         container.appendChild(card);
     });
 }
 
-// --- Fungsi Baru: Memulai Ulang 1 Foto Spesifik ---
 function initRetakeSingle(index) {
-    retakeIndex = index; // Set target index
-    showScreen('screen-capture'); // Pindah ke layar kamera
-    startCamera(); // Nyalakan kamera
+    retakeIndex = index; 
+    showScreen('screen-capture'); 
+    startCamera(); 
 }
 
-// --- Fungsi Update: Ulangi Semua (Menggantikan retakePhotos lama) ---
 function retakeAll() {
-    // Reset total
     retakeIndex = null;
-    showScreen('screen-template'); // Kembali pilih template
-}
-// --- Finalization ---
-function retakePhotos() {
-    // Cek waktu, kalau mepet jangan izinkan (opsional)
-    showScreen('screen-template');
+    showScreen('screen-strip-select'); 
 }
 
 function finalizeSession() {
-    clearInterval(sessionTimerInterval); // Stop timer sesi
+    clearInterval(sessionTimerInterval); 
     globalTimerBox.classList.add('hidden');
-    
     showScreen('screen-print');
     startPrintTimer();
 }
@@ -407,27 +571,21 @@ function finalizeSession() {
 function startPrintTimer() {
     let timer = CONFIG.printTime;
     updateTimerDisplay(timer, printTimerDisplay);
-
     printTimerInterval = setInterval(() => {
         timer--;
         updateTimerDisplay(timer, printTimerDisplay);
-        if (timer <= 0) {
-            finishSession();
-        }
+        if (timer <= 0) finishSession();
     }, 1000);
 }
 
-// --- Output Actions ---
 function downloadImage() {
     const link = document.createElement('a');
-    link.download = 'foto-seru-' + Date.now() + '.png';
+    link.download = 'polaroid-' + Date.now() + '.png';
     link.href = finalImage.src;
     link.click();
 }
 
-function printImage() {
-    window.print();
-}
+function printImage() { window.print(); }
 
 function finishSession() {
     clearInterval(printTimerInterval);
@@ -439,5 +597,6 @@ function resetApp() {
     clearInterval(printTimerInterval);
     currentScreen = 'screen-welcome';
     capturedImages = [];
+    customFrameImg = null; 
     showScreen('screen-welcome');
 }

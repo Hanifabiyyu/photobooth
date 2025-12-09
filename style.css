@@ -123,6 +123,25 @@ h1, h2 {
 
 .mini-strip { width: 60px; background: #eee; display: flex; flex-direction: column; padding: 5px; gap: 2px; margin-bottom: 10px; }
 .mini-strip div { background: #ccc; flex: 1; min-height: 20px; }
+/* --- Icon Polaroid --- */
+.polaroid-strip {
+    width: 50px;       /* Lebih ramping */
+    height: 70px;      /* Lebih tinggi (Portrait) */
+    background: white;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    gap: 0;
+    justify-content: flex-start;
+    border: 1px solid #ddd;
+}
+
+.polaroid-strip div {
+    background: #ccc;
+    width: 100%;
+    height: 75%;       /* Area foto kotak di atas */
+    margin-bottom: 0;
+}
 
 /* --- Camera Container (UPDATE) --- */
 /* --- Camera Container (UPDATE: RASIO KAMERA ASLI) --- */
@@ -286,4 +305,63 @@ h1, h2 {
         max-height: none; /* Reset max-height saat print */
         border: none; box-shadow: none; display: block; 
     }
+}
+/* ... CSS LAMA ... */
+
+/* --- Gallery Template Styles --- */
+.gallery-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+    max-height: 50vh; /* Agar bisa discroll jika banyak */
+    overflow-y: auto;
+}
+
+.gallery-item {
+    width: 100px; /* Ukuran thumbnail */
+    cursor: pointer;
+    border: 3px solid transparent;
+    border-radius: 8px;
+    transition: transform 0.2s;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.gallery-item:hover {
+    transform: scale(1.05);
+    border-color: var(--primary-btn);
+}
+
+.gallery-item img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 5px;
+}
+
+.divider {
+    margin: 20px 0;
+    font-size: 0.9rem;
+    color: #888;
+    position: relative;
+}
+
+/* Update Bagian Logo */
+.logo-container {
+    display: flex;
+    align-items: center; /* Biar logo dan teks sejajar secara vertikal */
+    gap: 10px; /* Jarak antara logo dan teks */
+}
+
+.app-logo {
+    height: 40px; /* Sesuaikan tinggi logo agar pas di header */
+    width: auto;  /* Lebar otomatis menyesuaikan tinggi */
+    object-fit: contain;
+}
+
+.logo-text {
+    font-family: 'Fredoka One', cursive;
+    color: #FF85A2;
+    font-size: 1.5rem; /* Sesuaikan ukuran teks */
 }
