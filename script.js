@@ -4,30 +4,27 @@ let sessionTimerInterval;
 let printTimerInterval;
 let retakeIndex = null; 
 let capturedImages = [];
-let selectedTemplate = 3; // 1 (Polaroid), 3, atau 4
+let selectedTemplate = 3; 
 let videoStream = null;
 let customFrameImg = null; 
 let isBnwMode = false;
+let layoutMode = 'strip'; // 'strip' | 'polaroid'
+let printCopies = 1;
+let detectedTemplatesP = [];
+let captureMode = 'auto'; // 'auto' | 'manual'
+let recapEnabled = true;
+let recapFrames = [], recapEvery = 1, recapTick = 0, recapTimer = null, recapBuildId = 0, recapUrl = null;
 
 // --- Config ---
 const CONFIG = {
     sessionTime: 5 * 60, 
     printTime: 3 * 60,   
     countDownTime: 5,    
-    
-    // Config Strip Biasa
-    printWidth: 57,      
-    photoHeight: 30,
-
-    // Config Polaroid (Instax Mini Standard)
-    polaroidWidth: 54,   // mm
-    polaroidHeight: 86,  // mm
-    polaroidImgW: 46,    // mm (Lebar foto di dalam polaroid)
-    polaroidImgH: 62     // mm (Tinggi foto di dalam polaroid)
+    printWidth: 57,      // mm
+    photoHeight: 30      // mm
 };
 
-// Variabel penampung hasil scan
-let detectedTemplates1 = []; // Untuk Polaroid
+// Variabel untuk menyimpan hasil scan otomatis
 let detectedTemplates3 = [];
 let detectedTemplates4 = [];
 
@@ -43,37 +40,47 @@ const previewImage = document.getElementById('preview-image');
 const finalImage = document.getElementById('final-image');
 const printTimerDisplay = document.getElementById('print-timer');
 
-// --- AUTO SCANNER ---
+// --- AUTO SCANNER (Jalankan saat awal) ---
 function initAutoScan() {
-    scanFiles('1', 1, detectedTemplates1); // Scan Polaroid (1_1.png)
-    scanFiles('3', 1, detectedTemplates3); // Scan 3 Strip
-    scanFiles('4', 1, detectedTemplates4); // Scan 4 Strip
+    // Scan asset 3_1.png dst
+    scanFiles('3', 1, detectedTemplates3);
+    // Scan asset 4_1.png dst
+    scanFiles('4', 1, detectedTemplates4);
+    scanFiles('p', 1, detectedTemplatesP); // p_1.png, p_2.png ... untuk polaroid
 }
 
 function scanFiles(type, index, targetArray) {
-    const filename = `${type}_${index}.png`; 
+    const filename = `${type}_${index}.png`; // misal 3_1.png
     const path = `assets/${filename}`;
     const img = new Image();
     
     img.onload = function() {
         targetArray.push(filename); 
-        scanFiles(type, index + 1, targetArray); 
+        scanFiles(type, index + 1, targetArray); // Lanjut cek nomor berikutnya
     };
     img.onerror = function() {
-        console.log(`Scan tipe ${type} selesai. Total: ${targetArray.length}`);
+        // Stop scanning jika file tidak ditemukan
+        console.log(`Scan ${type} selesai. Total: ${targetArray.length}`);
     };
     img.src = path;
 }
+
+// Jalankan Scanner
 initAutoScan();
+
 
 // --- Navigation ---
 function showScreen(screenId) {
+    // Pastikan selector mengambil semua screen yang benar
     const allScreens = document.querySelectorAll('.screen');
     allScreens.forEach(s => s.classList.remove('active'));
+    
     const target = document.getElementById(screenId);
     if (target) {
         target.classList.add('active');
         currentScreen = screenId;
+    } else {
+        console.error("Screen ID not found:", screenId);
     }
 }
 
@@ -82,85 +89,56 @@ function setFilterMode(mode) {
     isBnwMode = (mode === 'bnw');
 }
 
-// --- FLOW APLIKASI ---
+// --- FLOW ALUR BARU ---
+
+// 1. Tombol Mulai (Welcome Screen)
 function startSession() {
     startGlobalTimer(CONFIG.sessionTime);
     globalTimerBox.classList.remove('hidden');
+    // MASUK KE PILIH JUMLAH STRIP
     showScreen('screen-strip-select');
 }
 
+// 2. Pilih Jumlah Strip (3 atau 4)
 function selectStripCount(num) {
+    layoutMode = 'strip';
     selectedTemplate = num;
-    customFrameImg = null;
+    // MASUK KE GALERI TEMPLATE
     renderTemplateGallery(num);
     showScreen('screen-template-choice');
 }
 
-// 3. Render Galeri (Update: Ada Tombol Default)
+// 3. Render Galeri
 function renderTemplateGallery(num) {
     const galleryContainer = document.getElementById('assets-gallery');
     galleryContainer.innerHTML = ''; 
 
-    // --- 1. BUAT TOMBOL DEFAULT (TANPA FRAME) ---
-    const defaultItem = document.createElement('div');
-    defaultItem.className = 'gallery-item';
-    defaultItem.onclick = () => {
-        customFrameImg = null; // Set null agar pakai desain bawaan kode
-        startCameraSequence();
-    };
+    // Ambil data dari hasil scan
+    const list = (num === 'p') ? detectedTemplatesP : (num === 3 ? detectedTemplates3 : detectedTemplates4);
 
-    // Styling visual kotak "Default"
-    defaultItem.innerHTML = `
-        <div style="
-            width: 100px; 
-            height: ${num === 1 ? '140px' : '100px'}; /* Polaroid lebih tinggi */
-            background: #f0f0f0; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; 
-            border-radius: 5px; 
-            border: 2px dashed #ccc;
-            color: #666;
-            font-size: 0.8rem;
-            font-weight: bold;
-            text-align: center;
-        ">
-            <span style="font-size: 1.5rem; margin-bottom: 5px;">✨</span>
-            Default<br>(Polos)
-        </div>
-    `;
-    galleryContainer.appendChild(defaultItem);
-
-
-    // --- 2. TAMPILKAN ASET DARI FOLDER (JIKA ADA) ---
-    // Ambil data dari hasil scan sesuai jumlah strip
-    let list;
-    if (num === 1) list = detectedTemplates1;
-    else if (num === 3) list = detectedTemplates3;
-    else list = detectedTemplates4;
-
-    // Jika ada file template di folder assets, tampilkan setelah tombol default
-    if (list.length > 0) {
-        list.forEach(filename => {
-            const div = document.createElement('div');
-            div.className = 'gallery-item';
-            div.onclick = () => loadPremadeFrame('assets/' + filename);
-
-            const img = document.createElement('img');
-            img.src = 'assets/' + filename;
-            
-            // Styling thumbnail agar rapi
-            img.style.width = '100px'; 
-            img.style.height = 'auto';
-            img.style.borderRadius = '5px';
-            img.style.objectFit = 'contain';
-            
-            div.appendChild(img);
-            galleryContainer.appendChild(div);
-        });
+    if (list.length === 0) {
+        galleryContainer.innerHTML = '<p style="color:#888;">Tidak ada template bawaan (Cek folder assets).</p>';
+        return;
     }
+
+    list.forEach(filename => {
+        const div = document.createElement('div');
+        div.className = 'gallery-item';
+        // Saat diklik, load frame dan mulai kamera
+        div.onclick = () => loadPremadeFrame('assets/' + filename);
+
+        const img = document.createElement('img');
+        img.src = 'assets/' + filename;
+        img.style.width = '100px'; // Styling inline simple
+        img.style.margin = '5px';
+        img.style.cursor = 'pointer';
+        
+        div.appendChild(img);
+        galleryContainer.appendChild(div);
+    });
 }
+
+// 4a. Load Template Bawaan
 function loadPremadeFrame(path) {
     const img = new Image();
     img.onload = () => {
@@ -171,6 +149,7 @@ function loadPremadeFrame(path) {
     img.src = path;
 }
 
+// 4b. Upload Template Custom
 function handleCustomUpload(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
@@ -186,12 +165,16 @@ function handleCustomUpload(input) {
     }
 }
 
+// 5. Masuk ke Kamera
 function startCameraSequence() {
+    applyCropGuide();
+    resetRecap();
     capturedImages = [];
     retakeIndex = null;
     showScreen('screen-capture');
     startCamera();
 }
+
 
 // --- Camera Logic ---
 async function startCamera() {
@@ -201,10 +184,10 @@ async function startCamera() {
             audio: false 
         });
         videoElement.srcObject = videoStream;
-        videoElement.style.filter = isBnwMode ? 'grayscale(100%) contrast(1.1)' : 'none';
+        startRecap();
         
-        // Update Crop Guide Visual di Layar
-        updateCropGuideVisual();
+        // Apply Filter Live
+        videoElement.style.filter = isBnwMode ? 'grayscale(100%) contrast(1.1)' : 'none';
 
         setTimeout(() => runPhotoSequence(), 1000);
     } catch (err) {
@@ -212,49 +195,42 @@ async function startCamera() {
     }
 }
 
-// Fungsi Baru: Mengubah bentuk guide di layar (Landscape vs Portrait)
-function updateCropGuideVisual() {
-    const guide = document.querySelector('.crop-guide');
-    if (selectedTemplate === 1) {
-        // Mode Polaroid (Portrait 46x62 mm)
-        guide.style.aspectRatio = `${CONFIG.polaroidImgW} / ${CONFIG.polaroidImgH}`;
-    } else {
-        // Mode Strip (Landscape 57x30 mm)
-        guide.style.aspectRatio = `${CONFIG.printWidth} / ${CONFIG.photoHeight}`;
-    }
-}
-
 async function runPhotoSequence() {
-    const totalPhotos = selectedTemplate; // 1, 3, atau 4
-
     if (retakeIndex !== null) {
-        document.getElementById('photo-instruction').innerText = `Mengulang Foto`;
-        await doCountdown();
-        triggerShutterEffect();
-        capturedImages[retakeIndex] = captureFrame(); 
+        // Mode Retake
+        document.getElementById('photo-instruction').innerText = `Mengulang Foto ke-${retakeIndex + 1}`;
+        await takeTurn();
+        
+        // Flash
+        videoElement.style.opacity = 0;
+        setTimeout(() => videoElement.style.opacity = 1, 100);
+
+        const imgData = captureFrame();
+        capturedImages[retakeIndex] = imgData; 
         retakeIndex = null; 
     } else {
+        // Mode Normal Sequence
         capturedImages = []; 
-        for (let i = 1; i <= totalPhotos; i++) {
-            document.getElementById('photo-instruction').innerText = `Foto ke-${i} dari ${totalPhotos}`;
-            await doCountdown();
-            triggerShutterEffect();
-            capturedImages.push(captureFrame());
+        for (let i = 1; i <= selectedTemplate; i++) {
+            document.getElementById('photo-instruction').innerText = `Foto ke-${i} dari ${selectedTemplate}`;
+            await takeTurn();
             
-            if(i < totalPhotos) await new Promise(r => setTimeout(r, 1000));
+            videoElement.style.opacity = 0;
+            setTimeout(() => videoElement.style.opacity = 1, 100);
+
+            const imgData = captureFrame();
+            capturedImages.push(imgData);
+            
+            if(i < selectedTemplate) await new Promise(r => setTimeout(r, 1000));
         }
     }
 
     stopCamera();
     await generateStrip(); 
     renderRetakeThumbnails();
+    buildRecapGif();
+    document.getElementById('caption-box').classList.toggle('hidden', !!customFrameImg);
     showScreen('screen-preview');
-}
-
-function triggerShutterEffect() {
-    playSound('snd-shutter');
-    videoElement.style.opacity = 0;
-    setTimeout(() => videoElement.style.opacity = 1, 100);
 }
 
 function doCountdown() {
@@ -262,13 +238,11 @@ function doCountdown() {
         let count = CONFIG.countDownTime;
         countdownOverlay.classList.remove('hidden');
         countdownOverlay.innerText = count;
-        playSound('snd-beep');
 
         const interval = setInterval(() => {
             count--;
             if (count > 0) {
                 countdownOverlay.innerText = count;
-                playSound('snd-beep');
             } else {
                 clearInterval(interval);
                 countdownOverlay.classList.add('hidden');
@@ -278,18 +252,10 @@ function doCountdown() {
     });
 }
 
-// --- Capture Frame (Dynamic Ratio) ---
+// --- Capture Frame (Fix B&W & Ratio) ---
 function captureFrame() {
-    // Tentukan target rasio berdasarkan mode
-    let targetRatio;
-    if (selectedTemplate === 1) {
-        // Polaroid (Portrait)
-        targetRatio = CONFIG.polaroidImgW / CONFIG.polaroidImgH; 
-    } else {
-        // Strip (Landscape)
-        targetRatio = CONFIG.printWidth / CONFIG.photoHeight;
-    }
-
+    shutterFx();
+    const targetRatio = layoutMode === 'polaroid' ? 1 : CONFIG.printWidth / CONFIG.photoHeight; 
     const videoW = videoElement.videoWidth;
     const videoH = videoElement.videoHeight;
     const videoRatio = videoW / videoH;
@@ -316,197 +282,154 @@ function captureFrame() {
     ctx.scale(-1, 1);
 
     ctx.save(); 
-    if (isBnwMode) ctx.filter = 'grayscale(100%) contrast(1.1)';
-    
-    ctx.drawImage(videoElement, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-    
+    if (isBnwMode) {
+        ctx.filter = 'grayscale(100%) contrast(1.1)';
+    }
+
+    ctx.drawImage(
+        videoElement, 
+        cropX, cropY, cropW, cropH,     
+        0, 0, canvas.width, canvas.height 
+    );
+
     ctx.restore(); 
     return canvas.toDataURL('image/png');
 }
 
 function stopCamera() {
+    stopRecap();
     if (videoStream) {
         videoStream.getTracks().forEach(track => track.stop());
     }
 }
 
-// --- Modifikasi: generateStrip (Default Template Polaroid Cantik) ---
+// --- Helper Image Loader ---
+const loadImage = (src) => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img); 
+        img.onerror = reject;
+        img.src = src;
+    });
+};
+
+// --- Generate Strip (Fix B&W Leak) ---
 async function generateStrip() {
+    if (layoutMode === 'polaroid') return generatePolaroid();
+    await loadVintageFont();
     const pxPerMm = 11.8;
-    
-    // --- 1. SETTING UKURAN KANVAS ---
-    let canvasW, canvasH;
+    const slotW_mm = CONFIG.printWidth; 
+    const slotH_mm = CONFIG.photoHeight; 
+    const gap_mm = 8;
+    const topMargin_mm = 10;
+    const bottomMargin_mm = 20;
+    const padding_mm = 1; 
 
-    if (selectedTemplate === 1) {
-        // Ukuran Polaroid (54x86 mm)
-        canvasW = Math.round(CONFIG.polaroidWidth * pxPerMm);
-        canvasH = Math.round(CONFIG.polaroidHeight * pxPerMm);
-    } else {
-        // Ukuran Strip (Lebar 57mm, Tinggi Dinamis)
-        const gap = Math.round(8 * pxPerMm);
-        const header = Math.round(10 * pxPerMm);
-        const footer = Math.round(20 * pxPerMm);
-        const photoH = Math.round(CONFIG.photoHeight * pxPerMm);
-        
-        canvasW = Math.round(CONFIG.printWidth * pxPerMm);
-        canvasH = header + (photoH * selectedTemplate) + (gap * (selectedTemplate - 1)) + footer;
-    }
+    const stripWidth = Math.round(slotW_mm * pxPerMm);   
+    const slotHeight = Math.round(slotH_mm * pxPerMm);  
+    const gap = Math.round(gap_mm * pxPerMm);             
+    const headerHeight = Math.round(topMargin_mm * pxPerMm); 
+    const footerHeight = Math.round(bottomMargin_mm * pxPerMm); 
+    const paddingPx = Math.round(padding_mm * pxPerMm);
 
-    canvas.width = canvasW;
-    canvas.height = canvasH;
+    const totalHeight = headerHeight + (slotHeight * selectedTemplate) + (gap * (selectedTemplate - 1)) + footerHeight;
 
-    // Background Putih (Khas Polaroid)
+    canvas.width = stripWidth;
+    canvas.height = totalHeight;
+
+    // Background Putih
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Header (Jika tanpa custom frame)
+    if (!customFrameImg) {
+        ctx.fillStyle = "#FF85A2"; 
+        ctx.font = "bold 30px 'Fredoka One'";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle"; 
+        ctx.fillText("Avotobooth", stripWidth / 2, headerHeight / 2);
+    }
 
     try {
         const loadedImages = await Promise.all(capturedImages.map(src => loadImage(src)));
+        
+        let currentY = headerHeight; 
+        const imgW = stripWidth - (paddingPx * 2); 
+        const imgH = slotHeight - (paddingPx * 2);
 
-        // --- 2. MENGGAMBAR FOTO ---
-        if (selectedTemplate === 1) {
-            // === LOGIKA POLAROID ===
-            const imgW = CONFIG.polaroidImgW * pxPerMm;
-            const imgH = CONFIG.polaroidImgH * pxPerMm;
-            
-            // Posisi Foto: Centered horizontal, Top margin 4mm (standar instax)
-            const marginX = (canvasW - imgW) / 2;
-            const marginY = 4 * pxPerMm; 
+        loadedImages.forEach((img) => {
+            const drawX = paddingPx;
+            const drawY = currentY + paddingPx;
 
-            if (loadedImages[0]) {
-                drawImageWithFilter(loadedImages[0], marginX, marginY, imgW, imgH);
-                
-                // Efek Bayangan Halus di dalam foto (Biar lebih realistis)
-                if (!customFrameImg) {
-                    ctx.strokeStyle = "rgba(0,0,0,0.1)"; // Abu-abu sangat tipis
-                    ctx.lineWidth = 1;
-                    ctx.strokeRect(marginX, marginY, imgW, imgH);
-                }
+            ctx.save(); 
+            if (isBnwMode) {
+                ctx.filter = 'grayscale(100%) contrast(1.1)';
             }
+            ctx.drawImage(img, drawX, drawY, imgW, imgH);
+            ctx.restore(); 
 
-        } else {
-            // === LOGIKA STRIP (3 / 4 Foto) ===
-            const paddingPx = Math.round(1 * pxPerMm); // Padding 1mm
-            const imgW = canvasW - (paddingPx * 2);
-            const imgH = Math.round(CONFIG.photoHeight * pxPerMm) - (paddingPx * 2);
-            const gap = Math.round(8 * pxPerMm);
-            let currentY = Math.round(10 * pxPerMm); // Top Margin
-
-            // Header Teks (jika no frame)
+            // Border Hijau (Jika tanpa custom frame)
             if (!customFrameImg) {
-                ctx.fillStyle = "#FF85A2"; 
-                ctx.font = "bold 30px 'Fredoka One'";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle"; 
-                ctx.fillText("Avotobooth ✨", canvasW / 2, currentY / 2);
+                ctx.strokeStyle = "#CBF0E0"; 
+                ctx.lineWidth = 5;
+                ctx.strokeRect(drawX, drawY, imgW, imgH);
             }
+            
+            currentY += slotHeight + gap;
+        });
 
-            loadedImages.forEach((img) => {
-                const drawX = paddingPx;
-                const drawY = currentY + paddingPx;
-                
-                drawImageWithFilter(img, drawX, drawY, imgW, imgH);
-
-                if (!customFrameImg) {
-                    ctx.strokeStyle = "#CBF0E0"; 
-                    ctx.lineWidth = 5;
-                    ctx.strokeRect(drawX, drawY, imgW, imgH);
-                }
-                currentY += Math.round(CONFIG.photoHeight * pxPerMm) + gap;
-            });
-        }
-
-        // --- 3. OVERLAY FRAME / FOOTER TEXT ---
+        // Overlay Custom Frame
         if (customFrameImg) {
-            // Jika ada template custom, timpa semuanya
             ctx.drawImage(customFrameImg, 0, 0, canvas.width, canvas.height);
         } else {
-            // === DEFAULT TEMPLATE GENERATOR ===
-            ctx.textAlign = "center";
             ctx.textBaseline = "alphabetic"; 
-            
-            if (selectedTemplate === 1) {
-                // >> TEMPLATE DEFAULT POLAROID <<
-                // Area bawah polaroid (Height 86mm - PhotoEnd 66mm = 20mm Space)
-                
-                // 1. Nama Brand (Lebih Besar)
-               // ctx.fillStyle = "#FF85A2"; // Warna Pink Pastel
-                //ctx.font = "bold 24px 'Fredoka One'";
-                // Posisi: Sekitar 12mm dari bawah
-                //ctx.fillText("Avotobooth ✨", canvasW / 2, canvasH - (12 * pxPerMm));
-                
-                // ... kode sebelumnya ...
+            ctx.fillStyle = "#aaa";
+            // Tulisan editable di footer (kosong = tidak ada tulisan)
+            const raw = (document.getElementById('caption-input').value || '').trim();
+            if (raw) {
+                const maxW = stripWidth - paddingPx * 2 - 20;
+                let lines = raw.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 2);
+                let fs = lines.length > 1 ? 30 : 38;
+                ctx.font = fs + "px " + VINTAGE_FONT;
 
-// 2. Tanggal (Kecil di bawahnya)
-        ctx.fillStyle = "#000000ff"; 
-        // Pastikan tetap pakai font typewriter pilihan Anda
-        ctx.font = "24px 'Courier New', Courier, monospace";
+                // 1 baris yang terlalu panjang dipecah jadi 2 baris di spasi terdekat dari tengah
+                if (lines.length === 1 && ctx.measureText(lines[0]).width > maxW) {
+                    const w = lines[0].split(' ');
+                    if (w.length > 1) {
+                        let best = 1, diff = Infinity;
+                        for (let i = 1; i < w.length; i++) {
+                            const d = Math.abs(w.slice(0, i).join(' ').length - w.slice(i).join(' ').length);
+                            if (d < diff) { diff = d; best = i; }
+                        }
+                        lines = [w.slice(0, best).join(' '), w.slice(best).join(' ')];
+                        fs = 30;
+                    }
+                }
 
-        // --- LOGIKA FORMAT TANGGAL CUSTOM ---
-        const now = new Date();
-        const tgl = now.getDate(); // Ambil tanggal (misal: 9)
-        const bln = now.toLocaleDateString('id-ID', { month: 'short' }); // Ambil bulan pendek (misal: Des)
-        const thn = now.getFullYear().toString().slice(-2); // Ambil 2 digit terakhir tahun (misal: 25)
+                let used = fs;
+                do { used = fs; ctx.font = used + "px " + VINTAGE_FONT; fs -= 2; }
+                while (Math.max(...lines.map(l => ctx.measureText(l).width)) > maxW && fs > 14);
 
-        // Gabungkan menjadi string: "9 Des '25"
-        const tanggalCustom = `${tgl} ${bln} '${thn}`; 
-        // ------------------------------------
+                const lineH = used * 1.25;
+                const raise = Math.round(5 * pxPerMm); // naik 5 mm dari tengah footer
+                const startY = totalHeight - footerHeight / 2 - raise - ((lines.length - 1) * lineH) / 2;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#222';
+                lines.forEach((l, i) => ctx.fillText(l, stripWidth / 2, startY + i * lineH, maxW));
+            }
+        }
 
-        // Posisi: Sekitar 5mm dari bawah
-        ctx.fillText(tanggalCustom, canvasW / 2, canvasH - (5 * pxPerMm));
+        const finalDataUrl = canvas.toDataURL('image/png');
+        previewImage.src = finalDataUrl;
+        finalImage.src = finalDataUrl;
 
-    } else {
-        // >> TEMPLATE DEFAULT STRIP <<
-        
-        // 1. Warna Disamakan (Hitam)
-        ctx.fillStyle = "#000000ff";
-        
-        // 2. Font Disamakan (Typewriter 24px)
-        ctx.font = "24px 'Courier New', Courier, monospace";
-        
-        // 3. Logika Format Tanggal Disamakan
-        const now = new Date();
-        const tgl = now.getDate();
-        const bln = now.toLocaleDateString('id-ID', { month: 'short' });
-        const thn = now.getFullYear().toString().slice(-2);
-        const tanggalCustom = `${tgl} ${bln} '${thn}`;
-
-        // 4. Posisi Disamakan (5mm dari bawah)
-        // Sebelumnya 10mm, sekarang disamakan jadi 5mm agar seragam
-        ctx.fillText(tanggalCustom, canvasW / 2, canvasH - (5 * pxPerMm));
+    } catch (error) {
+        console.error("Generate error:", error);
     }
 }
 
-// Update Preview
-const finalDataUrl = canvas.toDataURL('image/png');
-previewImage.src = finalDataUrl;
-finalImage.src = finalDataUrl;
-
-} catch (error) {
-    console.error("Generate error:", error);
-}
-}
-// Helper Draw agar Filter Aman
-function drawImageWithFilter(img, x, y, w, h) {
-    ctx.save();
-    if (isBnwMode) ctx.filter = 'grayscale(100%) contrast(1.1)';
-    ctx.drawImage(img, x, y, w, h);
-    ctx.restore();
-}
-
-// --- Helpers Lain ---
-const loadImage = (src) => new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-});
-
-function playSound(id) {
-    const audio = document.getElementById(id);
-    if(audio) { audio.currentTime=0; audio.play().catch(e=>{}); }
-}
-
-// --- Timer & Output ---
+// --- Timer & Logic Lain ---
 function startGlobalTimer(duration) {
     clearInterval(sessionTimerInterval);
     let timer = duration;
@@ -515,13 +438,14 @@ function startGlobalTimer(duration) {
     sessionTimerInterval = setInterval(() => {
         timer--;
         updateTimerDisplay(timer, timerDisplay);
+        
         if (timer <= 0) {
             clearInterval(sessionTimerInterval);
             if (capturedImages.length > 0) {
-                alert("Waktu habis! Mencetak...");
+                alert("Waktu sesi habis!");
                 stopCamera();
-                generateStrip();
-                finalizeSession();
+                generateStrip(); 
+                finalizeSession(); 
             } else {
                 alert("Waktu habis.");
                 resetApp();
@@ -536,6 +460,7 @@ function updateTimerDisplay(seconds, element) {
     element.textContent = `${m}:${s}`;
 }
 
+// --- Retake & Print ---
 function renderRetakeThumbnails() {
     const container = document.getElementById('thumbnails-container');
     container.innerHTML = ''; 
@@ -557,8 +482,9 @@ function initRetakeSingle(index) {
 }
 
 function retakeAll() {
+    // Balik ke pilih template/kamera
     retakeIndex = null;
-    showScreen('screen-strip-select'); 
+    showScreen('screen-strip-select'); // atau screen-template-choice
 }
 
 function finalizeSession() {
@@ -580,14 +506,235 @@ function startPrintTimer() {
 
 function downloadImage() {
     const link = document.createElement('a');
-    link.download = 'polaroid-' + Date.now() + '.png';
+    link.download = 'foto-seru-' + Date.now() + '.png';
     link.href = finalImage.src;
     link.click();
 }
 
-function printImage() { window.print(); }
+// =====================================================
+// PRINTER THERMAL BLUETOOTH (SC03h, protokol "cat printer")
+// =====================================================
+const PRINTER = {
+    namePrefix: 'SC03',
+    service: 0xAE30,
+    writeChar: 0xAE01,
+    notifyChar: 0xAE02,
+    contentWidth: 360,       // lebar foto saat cetak (dot, maks 384). 8 dot = 1 mm, jadi 360 = 45 mm
+    offsetX: -12,            // geser horizontal (dot). Negatif = ke kiri, positif = ke kanan. 8 dot = 1 mm
+    topMargin: 0,            // ruang putih di atas foto (dot). 8 dot = 1 mm
+    dotsWidth: 384,          // 58 mm = 384 dot
+    chunkSize: 100,          // byte per kirim. Kalau hasil cetak acak/putus, turunkan ke 20
+    chunkDelay: 15,          // ms jeda antar kirim. Kalau putus-putus, naikkan ke 25-30
+    energy: 20000,           // kepadatan titik. Default awal 12000, maksimum 65535. Naikkan bertahap (16000, 20000, 25000, 30000)
+    speed: 0x10,             // makin kecil = makin lambat = titik makin padat (default awal 0x20)
+    quality: 0x35,           // 0x31 - 0x35, makin besar makin gelap
+    feedLines: 0x80,         // jarak kertas keluar setelah cetak
+    contrast: 1.4,          // kontras sebelum dithering
+    brightness: -15            // -40 s/d +40, naikkan kalau hasil terlalu gelap
+};
+
+let printerDevice = null;
+let printerChar = null;
+let isPrinting = false;
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function setPrinterStatus(connected, text) {
+    const el = document.getElementById('printer-status');
+    if (!el) return;
+    el.classList.toggle('on', connected);
+    el.classList.toggle('off', !connected);
+    el.textContent = text || (connected ? '🖨️ Printer: terhubung' : '🖨️ Printer: belum terhubung');
+}
+
+// --- Koneksi ---
+async function openGatt() {
+    const server = await printerDevice.gatt.connect();
+    const service = await server.getPrimaryService(PRINTER.service);
+    printerChar = await service.getCharacteristic(PRINTER.writeChar);
+    try {
+        const n = await service.getCharacteristic(PRINTER.notifyChar);
+        await n.startNotifications();
+        n.addEventListener('characteristicvaluechanged', e => {
+            const v = new Uint8Array(e.target.value.buffer);
+            console.log('Printer:', [...v].map(b => b.toString(16).padStart(2, '0')).join(' '));
+        });
+    } catch (e) { console.warn('Notify tidak aktif:', e.message); }
+    setPrinterStatus(true);
+}
+
+// Return true kalau siap. Harus dipanggil dari klik pengguna kalau belum pernah dipilih.
+async function ensurePrinter() {
+    if (!navigator.bluetooth) {
+        alert('Browser ini tidak mendukung Web Bluetooth. Pakai Chrome/Edge (Brave: aktifkan flag Web Bluetooth).');
+        return false;
+    }
+    if (printerChar && printerDevice && printerDevice.gatt.connected) return true;
+
+    // Coba sambung ulang ke perangkat yang sudah dipilih (tanpa dialog)
+    if (printerDevice) {
+        try { await openGatt(); return true; }
+        catch (e) { console.warn('Sambung ulang gagal:', e.message); printerDevice = null; }
+    }
+
+    // Pertama kali: dialog pilih perangkat
+    try {
+        printerDevice = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: PRINTER.namePrefix }],
+            optionalServices: [PRINTER.service]
+        });
+        printerDevice.addEventListener('gattserverdisconnected', () => {
+            printerChar = null;
+            setPrinterStatus(false);
+        });
+        await openGatt();
+        return true;
+    } catch (e) {
+        printerDevice = null;
+        setPrinterStatus(false);
+        if (e.name !== 'NotFoundError') alert('Gagal menghubungkan printer: ' + e.message);
+        return false;
+    }
+}
+
+async function connectPrinterClick() {
+    setPrinterStatus(false, '🖨️ Menyambung...');
+    await ensurePrinter();
+}
+
+// --- Protokol paket ---
+function crc8(data) {
+    let crc = 0;
+    for (const b of data) {
+        crc ^= b;
+        for (let i = 0; i < 8; i++) crc = (crc & 0x80) ? ((crc << 1) ^ 0x07) & 0xFF : (crc << 1) & 0xFF;
+    }
+    return crc;
+}
+function pkt(cmd, data) {
+    const d = Array.from(data);
+    return [0x51, 0x78, cmd, 0x00, d.length & 0xFF, d.length >> 8, ...d, crc8(d), 0xFF];
+}
+
+// --- Gambar -> baris bitmap 1-bit (dithering Floyd-Steinberg) ---
+async function imageToPrintLines(src) {
+    const img = await loadImage(src);
+    const W = PRINTER.dotsWidth;
+    const cw = Math.min(W, PRINTER.contentWidth);
+    const ch = Math.round(img.height * cw / img.width);
+    const x0 = Math.max(0, Math.min(W - cw, Math.round((W - cw) / 2 + PRINTER.offsetX)));
+    const y0 = PRINTER.topMargin;
+    const H = ch + y0;
+
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const cx = c.getContext('2d');
+    cx.fillStyle = '#fff';
+    cx.fillRect(0, 0, W, H);
+    cx.drawImage(img, x0, y0, cw, ch);
+
+    const px = cx.getImageData(0, 0, W, H).data;
+    const g = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+        let v = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+        v = (v - 128) * PRINTER.contrast + 128 + PRINTER.brightness;
+        g[i] = Math.max(0, Math.min(255, v));
+    }
+
+    const BPL = W / 8;
+    const lines = [];
+    for (let y = 0; y < H; y++) {
+        const line = new Uint8Array(BPL);
+        for (let x = 0; x < W; x++) {
+            const i = y * W + x;
+            const old = g[i];
+            const nw = old < 128 ? 0 : 255;
+            const err = old - nw;
+            if (x + 1 < W) g[i + 1] += err * 7 / 16;
+            if (y + 1 < H) {
+                if (x > 0) g[i + W - 1] += err * 3 / 16;
+                g[i + W] += err * 5 / 16;
+                if (x + 1 < W) g[i + W + 1] += err * 1 / 16;
+            }
+            if (nw === 0) line[x >> 3] |= 1 << (x & 7); // 1 = titik hitam, LSB dulu
+        }
+        lines.push(line);
+    }
+    return lines;
+}
+
+async function writeChunk(chunk) {
+    for (let t = 0; t < 5; t++) {
+        try { await printerChar.writeValueWithoutResponse(chunk); return; }
+        catch (e) { await sleep(30); }
+    }
+    throw new Error('Koneksi ke printer terputus saat mengirim data.');
+}
+
+async function sendToPrinter(bytes, onProgress) {
+    for (let i = 0; i < bytes.length; i += PRINTER.chunkSize) {
+        await writeChunk(bytes.slice(i, i + PRINTER.chunkSize));
+        if (onProgress) onProgress(Math.min(100, Math.round((i / bytes.length) * 100)));
+        await sleep(PRINTER.chunkDelay);
+    }
+}
+
+// --- Tombol Cetak ---
+async function printImage() {
+    if (isPrinting) return;
+
+    // Tanpa Web Bluetooth: pakai dialog print biasa
+    if (!navigator.bluetooth) {
+        if (confirm('Web Bluetooth tidak tersedia. Cetak lewat dialog print biasa?')) window.print();
+        return;
+    }
+
+    const btn = document.getElementById('btn-print');
+    const originalText = btn.textContent;
+    isPrinting = true;
+    btn.disabled = true;
+
+    try {
+        btn.textContent = 'Menyambung printer...';
+        if (!(await ensurePrinter())) return;
+
+        btn.textContent = 'Menyiapkan gambar...';
+        const lines = await imageToPrintLines(finalImage.src);
+
+        const out = [];
+        out.push(...pkt(0xA3, [0x00]));
+        out.push(...pkt(0xA4, [PRINTER.quality]));
+        out.push(...pkt(0xA6, [0xAA,0x55,0x17,0x38,0x44,0x5F,0x5F,0x5F,0x44,0x38,0x2C]));
+        out.push(...pkt(0xAF, [PRINTER.energy & 0xFF, (PRINTER.energy >> 8) & 0xFF]));
+        out.push(...pkt(0xBE, [0x00]));
+        out.push(...pkt(0xBD, [PRINTER.speed]));
+        for (const line of lines) out.push(...pkt(0xA2, line));
+        out.push(...pkt(0xA1, [PRINTER.feedLines, 0x00]));
+        out.push(...pkt(0xA6, [0xAA,0x55,0x17,0,0,0,0,0,0,0,0x17]));
+        out.push(...pkt(0xA3, [0x00]));
+
+        const data = new Uint8Array(out);
+        for (let c = 1; c <= printCopies; c++) {
+            await sendToPrinter(data, (p) => {
+                btn.textContent = `Mencetak ${c}/${printCopies}... ${p}%`;
+            });
+            if (c < printCopies) await sleep(3000);
+        }
+
+        btn.textContent = 'Selesai dikirim ✅';
+        await sleep(1500);
+    } catch (e) {
+        console.error(e);
+        alert('Gagal mencetak: ' + e.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        isPrinting = false;
+    }
+}
 
 function finishSession() {
+    if (isPrinting) return; // tunggu pengiriman ke printer selesai
     clearInterval(printTimerInterval);
     showScreen('screen-thankyou');
 }
@@ -597,6 +744,260 @@ function resetApp() {
     clearInterval(printTimerInterval);
     currentScreen = 'screen-welcome';
     capturedImages = [];
-    customFrameImg = null; 
+    customFrameImg = null; // Reset frame
+    layoutMode = 'strip';
+    setCopies(1);
+    resetRecap(); stopRecap();
+    document.querySelector('input[name=copies][value="1"]').checked = true;
+    document.getElementById('caption-input').value = '';
     showScreen('screen-welcome');
+}
+
+// =====================================================
+// FITUR TAMBAHAN: Polaroid, efek jepret, opsi sesi
+// =====================================================
+function selectPolaroid() {
+    layoutMode = 'polaroid';
+    selectedTemplate = 1;
+    renderTemplateGallery('p');
+    showScreen('screen-template-choice');
+}
+
+function noFrame() {
+    customFrameImg = null;
+    startCameraSequence();
+}
+
+function setCountdown(n) { CONFIG.countDownTime = n; }
+function setCopies(n) { printCopies = n; }
+
+function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+}
+
+// Panduan crop mengikuti layout (strip lebar / polaroid persegi)
+function applyCropGuide() {
+    const g = document.querySelector('.crop-guide');
+    if (layoutMode === 'polaroid') {
+        g.style.width = 'auto'; g.style.height = '100%'; g.style.aspectRatio = '1 / 1';
+    } else {
+        g.style.width = '100%'; g.style.height = 'auto'; g.style.aspectRatio = '57 / 30';
+    }
+}
+
+// Kilatan putih + bunyi "bip" saat foto diambil
+function shutterFx() {
+    const f = document.getElementById('flash');
+    f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
+    try {
+        const a = new (window.AudioContext || window.webkitAudioContext)();
+        const o = a.createOscillator(), g = a.createGain();
+        o.frequency.value = 880; g.gain.value = 0.08;
+        o.connect(g); g.connect(a.destination);
+        o.start(); o.stop(a.currentTime + 0.12);
+    } catch (e) {}
+}
+
+let captionTimer;
+function onCaptionInput() {
+    clearTimeout(captionTimer);
+    captionTimer = setTimeout(generateStrip, 250);
+}
+
+// Polaroid: 1 foto persegi + margin bawah tebal untuk tulisan
+async function generatePolaroid() {
+    await loadVintageFont();
+    const pxPerMm = 11.8;
+    const W = Math.round(CONFIG.printWidth * pxPerMm);
+    const pad = Math.round(4 * pxPerMm);
+    const photo = W - pad * 2;
+    const bottom = Math.round(20 * pxPerMm);
+
+    canvas.width = W;
+    canvas.height = pad + photo + bottom;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    try {
+        const img = await loadImage(capturedImages[0]);
+        ctx.save();
+        if (isBnwMode) ctx.filter = 'grayscale(100%) contrast(1.1)';
+        ctx.drawImage(img, pad, pad, photo, photo);
+        ctx.restore();
+
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(pad, pad, photo, photo);
+
+        if (customFrameImg) {
+            ctx.drawImage(customFrameImg, 0, 0, canvas.width, canvas.height);
+        } else {
+            const caption = (document.getElementById('caption-input').value || 'Avotobooth').replace(/\s*\n\s*/g, ' ').trim();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const rowY = pad + photo + bottom * 0.45;
+            const stamp = formatStamp();
+
+            // Tanggal: rata kanan
+            ctx.fillStyle = '#2b2623';
+            ctx.textAlign = 'right';
+            ctx.font = "26px " + VINTAGE_FONT;
+            if ('letterSpacing' in ctx) ctx.letterSpacing = '2px';
+            const dateW = ctx.measureText(stamp).width;
+            ctx.fillText(stamp, W - pad, rowY);
+            if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
+
+            // Tulisan: rata kiri, ukuran mengecil otomatis agar tidak menabrak tanggal
+            const maxW = photo - dateW - 24;
+            let fs = 38;
+            do { ctx.font = fs + "px " + VINTAGE_FONT; fs -= 2; }
+            while (ctx.measureText(caption).width > maxW && fs > 16);
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#222';
+            ctx.fillText(caption, pad, rowY, maxW);
+        }
+
+        const url = canvas.toDataURL('image/png');
+        previewImage.src = url;
+        finalImage.src = url;
+    } catch (e) { console.error('Polaroid error:', e); }
+}
+
+
+// =====================================================
+// MODE MANUAL (tombol jepret)
+// =====================================================
+function setCaptureMode(m) { captureMode = m; }
+function setRecap(on) { recapEnabled = on; }
+
+function takeTurn() { return captureMode === 'manual' ? waitShutter() : doCountdown(); }
+
+function waitShutter() {
+    return new Promise(resolve => {
+        const btn = document.getElementById('shutter-btn');
+        const hint = document.getElementById('photo-instruction');
+        hint.innerText += ' • tekan tombol Jepret (atau Spasi)';
+        btn.classList.remove('hidden');
+        const done = () => {
+            btn.classList.add('hidden');
+            btn.onclick = null;
+            document.removeEventListener('keydown', onKey);
+            resolve();
+        };
+        const onKey = (e) => {
+            if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); done(); }
+        };
+        btn.onclick = done;
+        document.addEventListener('keydown', onKey);
+    });
+}
+
+// =====================================================
+// REKAP GIF (merekam selama sesi memotret)
+// =====================================================
+const GIF_LIB = 'https://unpkg.com/gifenc@1.0.3/dist/gifenc.esm.js';
+const RECAP_W = 300;     // lebar GIF (px)
+const RECAP_MAX = 150;   // batas frame; kalau lewat, frame dijarangkan otomatis
+const recapCanvas = document.createElement('canvas');
+const recapCtx = recapCanvas.getContext('2d', { willReadFrequently: true });
+
+function startRecap() {
+    if (!recapEnabled) return;
+    clearInterval(recapTimer);
+    recapTimer = setInterval(grabRecapFrame, 250); // ~4 frame per detik
+    document.getElementById('rec-dot').classList.remove('hidden');
+}
+
+function stopRecap() {
+    clearInterval(recapTimer);
+    document.getElementById('rec-dot').classList.add('hidden');
+}
+
+function resetRecap() {
+    recapFrames = []; recapEvery = 1; recapTick = 0; recapBuildId++;
+    if (recapUrl) { URL.revokeObjectURL(recapUrl); recapUrl = null; }
+    document.getElementById('recap-box').classList.add('hidden');
+}
+
+function grabRecapFrame() {
+    if (!videoElement.videoWidth) return;
+    if ((recapTick++ % recapEvery) !== 0) return;
+
+    const ratio = layoutMode === 'polaroid' ? 1 : CONFIG.printWidth / CONFIG.photoHeight;
+    const vw = videoElement.videoWidth, vh = videoElement.videoHeight;
+    let cw, ch;
+    if (vw / vh > ratio) { ch = vh; cw = vh * ratio; } else { cw = vw; ch = vw / ratio; }
+    const W = RECAP_W, H = Math.round(W / ratio);
+
+    recapCanvas.width = W; recapCanvas.height = H;
+    recapCtx.save();
+    recapCtx.translate(W, 0); recapCtx.scale(-1, 1);
+    if (isBnwMode) recapCtx.filter = 'grayscale(100%) contrast(1.1)';
+    recapCtx.drawImage(videoElement, (vw - cw) / 2, (vh - ch) / 2, cw, ch, 0, 0, W, H);
+    recapCtx.restore();
+    recapFrames.push(recapCtx.getImageData(0, 0, W, H));
+
+    if (recapFrames.length > RECAP_MAX) {
+        recapFrames = recapFrames.filter((_, i) => i % 2 === 0);
+        recapEvery *= 2;
+    }
+}
+
+async function buildRecapGif() {
+    const box = document.getElementById('recap-box');
+    const st = document.getElementById('recap-status');
+    const img = document.getElementById('recap-img');
+    const dl = document.getElementById('recap-dl');
+    if (!recapEnabled || recapFrames.length < 3) { box.classList.add('hidden'); return; }
+
+    const id = ++recapBuildId;
+    box.classList.remove('hidden');
+    img.classList.add('hidden'); dl.classList.add('hidden');
+    st.textContent = '⏳ Membuat rekap GIF...';
+
+    try {
+        const { GIFEncoder, quantize, applyPalette } = await import(GIF_LIB);
+        const gif = GIFEncoder();
+        const delay = 250 * recapEvery;
+        for (const f of recapFrames) {
+            if (id !== recapBuildId) return; // dibatalkan (sesi baru / retake)
+            const palette = quantize(f.data, 256);
+            gif.writeFrame(applyPalette(f.data, palette), f.width, f.height, { palette, delay });
+            await sleep(0); // beri napas ke UI
+        }
+        gif.finish();
+        if (recapUrl) URL.revokeObjectURL(recapUrl);
+        recapUrl = URL.createObjectURL(new Blob([gif.bytes()], { type: 'image/gif' }));
+        img.src = recapUrl;
+        img.classList.remove('hidden'); dl.classList.remove('hidden');
+        st.textContent = '🎞️ Rekap GIF siap';
+    } catch (e) {
+        console.error(e);
+        st.textContent = 'Gagal membuat GIF (butuh internet untuk memuat pustaka gifenc).';
+    }
+}
+
+function downloadRecap() {
+    if (!recapUrl) return;
+    const a = document.createElement('a');
+    a.href = recapUrl;
+    a.download = 'rekap-avotobooth-' + Date.now() + '.gif';
+    a.click();
+}
+
+
+// =====================================================
+// TIMESTAMP GAYA POLAROID VINTAGE  ->  "1 5  OCT  2023"
+// =====================================================
+const VINTAGE_FONT = "'Special Elite', 'Courier New', monospace";
+const STAMP_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+function formatStamp(date = new Date()) {
+    const d = String(date.getDate()).padStart(2, '0').split('').join(' ');
+    return `${d}  ${STAMP_MONTHS[date.getMonth()]}  ${date.getFullYear()}`;
+}
+
+async function loadVintageFont() {
+    try { await document.fonts.load("34px 'Special Elite'"); } catch (e) {}
 }
