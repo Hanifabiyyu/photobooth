@@ -123,25 +123,6 @@ h1, h2 {
 
 .mini-strip { width: 60px; background: #eee; display: flex; flex-direction: column; padding: 5px; gap: 2px; margin-bottom: 10px; }
 .mini-strip div { background: #ccc; flex: 1; min-height: 20px; }
-/* --- Icon Polaroid --- */
-.polaroid-strip {
-    width: 50px;       /* Lebih ramping */
-    height: 70px;      /* Lebih tinggi (Portrait) */
-    background: white;
-    display: flex;
-    flex-direction: column;
-    padding: 4px;
-    gap: 0;
-    justify-content: flex-start;
-    border: 1px solid #ddd;
-}
-
-.polaroid-strip div {
-    background: #ccc;
-    width: 100%;
-    height: 75%;       /* Area foto kotak di atas */
-    margin-bottom: 0;
-}
 
 /* --- Camera Container (UPDATE) --- */
 /* --- Camera Container (UPDATE: RASIO KAMERA ASLI) --- */
@@ -365,3 +346,87 @@ h1, h2 {
     color: #FF85A2;
     font-size: 1.5rem; /* Sesuaikan ukuran teks */
 }
+/* --- Status Printer --- */
+.top-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+.printer-status {
+    font-size: 0.85rem;
+    font-weight: bold;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    user-select: none;
+}
+.printer-status.on  { background: var(--pastel-mint); color: #2e7d5b; }
+.printer-status.off { background: #ffe0e0; color: #c0392b; }
+.btn-primary:disabled { opacity: 0.6; cursor: wait; }
+
+
+/* =====================================================
+   UI v2 — tampilan lebih rapi
+   ===================================================== */
+body { background: linear-gradient(160deg, #d9f5e8 0%, #ffe9ef 100%); background-attachment: fixed; }
+.top-bar { align-items: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.timer-display { background: #fff; padding: 6px 14px; border-radius: 20px; font-weight: 700; }
+.icon-btn { border: none; background: #fff; border-radius: 12px; width: 38px; height: 38px; font-size: 1.1rem; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+.screen { max-width: 980px; margin: 0 auto; }
+
+.content-box { width: 100%; max-width: 520px; border-radius: 28px; padding: 36px 32px; }
+.hero-logo { height: 90px; width: auto; margin-bottom: 8px; }
+
+.option-group { margin: 18px 0; text-align: center; }
+.option-label { font-weight: 700; color: var(--primary-btn); margin-bottom: 8px; font-size: 0.95rem; }
+.chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.chip input { display: none; }
+.chip span { display: inline-block; padding: 10px 18px; border-radius: 30px; background: #f3f3f3; cursor: pointer; font-weight: 700; border: 2px solid transparent; transition: 0.15s; }
+.chip input:checked + span { background: var(--pastel-pink); border-color: var(--primary-btn); color: #c24a63; }
+
+.btn-back { align-self: flex-start; background: none; border: none; font: inherit; font-weight: 700; color: #777; cursor: pointer; margin-bottom: 8px; padding: 6px 4px; }
+
+.template-options { gap: 22px; }
+.template-card { width: 170px; padding: 22px 16px; border-radius: 22px; box-shadow: 0 6px 16px rgba(0,0,0,0.08); font-weight: 700; }
+.mini-strip { margin: 0 auto 12px; }
+.mini-polaroid { width: 70px; margin: 0 auto 12px; background: #fff; border: 2px solid #ddd; border-radius: 3px; padding: 5px 5px 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+.mini-polaroid div { background: #ccc; aspect-ratio: 1 / 1; }
+
+.action-buttons { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; }
+
+.flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 40; }
+.flash.go { animation: shutterFlash 0.4s ease-out; }
+@keyframes shutterFlash { 0% { opacity: 0.95; } 100% { opacity: 0; } }
+#photo-instruction { margin-top: 16px; background: #fff; padding: 10px 22px; border-radius: 30px; font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+.caption-box { width: 100%; max-width: 360px; margin: 12px auto 0; font-weight: 700; }
+.caption-box input { width: 100%; margin-top: 6px; padding: 12px 16px; border-radius: 14px; border: 2px solid var(--pastel-pink); font: inherit; text-align: center; }
+#preview-image, #final-image { border-radius: 4px; }
+
+
+/* --- Mode manual & rekap GIF --- */
+.btn-shutter {
+    width: 112px; height: 112px; border-radius: 50%;
+    border: 8px solid var(--pastel-pink);
+    background: linear-gradient(135deg, #ff5fa2, #ff8fb8);
+    color: #fff; font: 700 1rem 'Quicksand', sans-serif; line-height: 1.3;
+    cursor: pointer; margin-top: 14px; touch-action: manipulation;
+    box-shadow: 0 8px 20px rgba(255, 95, 162, 0.4);
+    animation: shutterPulse 1.4s ease-in-out infinite;
+}
+.btn-shutter:active { transform: scale(0.93); }
+@keyframes shutterPulse { 50% { transform: scale(1.06); } }
+
+.rec-dot {
+    position: absolute; top: 12px; left: 14px; z-index: 30;
+    background: rgba(0,0,0,0.55); color: #ff5a5a; font-weight: 700; font-size: 0.85rem;
+    padding: 4px 10px; border-radius: 20px; animation: recBlink 1.2s infinite;
+}
+@keyframes recBlink { 50% { opacity: 0.4; } }
+
+.recap-box {
+    background: #fff; border-radius: 20px; padding: 14px 18px; margin-top: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08); text-align: center; width: 100%; max-width: 360px; font-weight: 700;
+}
+.recap-box img { max-height: 170px; max-width: 100%; border-radius: 8px; display: block; margin: 10px auto 4px; }
+.recap-box .btn-secondary { margin: 6px 0 0; }
+@media print { .recap-box, .rec-dot, .btn-shutter { display: none !important; } }
+
+.caption-box textarea { width: 100%; margin-top: 6px; padding: 12px 16px; border-radius: 14px; border: 2px solid var(--pastel-pink); font: inherit; text-align: center; resize: none; }
+.caption-box small { font-weight: 400; color: #888; }
