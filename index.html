@@ -7,7 +7,7 @@
     <link rel="icon" href="assets/logo.png" type="image/png">
 
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&family=Special+Elite&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
@@ -18,66 +18,85 @@
             <span class="logo-text">✨ Avotobooth ✨</span>
         </div>
         
-        <div id="global-timer" class="timer-display hidden">Sisa Waktu: <span id="time-remaining">05:00</span></div>
+        <div class="top-right">
+            <button class="icon-btn" onclick="toggleFullscreen()" title="Layar penuh">⛶</button>
+            <div id="printer-status" class="printer-status off" onclick="connectPrinterClick()" title="Klik untuk menghubungkan printer">🖨️ Printer: belum terhubung</div>
+            <div id="global-timer" class="timer-display hidden">Sisa Waktu: <span id="time-remaining">05:00</span></div>
+        </div>
     </div>
 
     <section id="screen-welcome" class="screen active">
         <div class="content-box">
+            <img src="assets/logo.png" alt="" class="hero-logo">
             <h1>Halo! Selamat Datang</h1>
-            <p>Siap untuk membuat kenangan seru?</p>
-            
-            <div class="filter-selection" style="margin: 20px 0;">
-                <p style="font-weight: bold; margin-bottom: 10px; color: var(--primary-btn);">Pilih Filter:</p>
-                <label style="margin-right: 15px; cursor: pointer;">
-                    <input type="radio" name="filterMode" value="color" checked onchange="setFilterMode('color')"> 
-                    🌈 Color
-                </label>
-                <label style="margin-right: 15px; cursor: pointer;">
-                    <input type="radio" name="filterMode" value="bnw" onchange="setFilterMode('bnw')"> 
-                    ⚫⚪ B&W
-                </label>
+            <p>Siap membuat kenangan seru?</p>
+
+            <div class="option-group">
+                <div class="option-label">Filter</div>
+                <div class="chips">
+                    <label class="chip"><input type="radio" name="filterMode" value="color" checked onchange="setFilterMode('color')"><span>🌈 Color</span></label>
+                    <label class="chip"><input type="radio" name="filterMode" value="bnw" onchange="setFilterMode('bnw')"><span>⚫⚪ B&amp;W</span></label>
+                </div>
+            </div>
+            <div class="option-group">
+                <div class="option-label">Hitung mundur</div>
+                <div class="chips">
+                    <label class="chip"><input type="radio" name="cd" onchange="setCountdown(3)"><span>3 detik</span></label>
+                    <label class="chip"><input type="radio" name="cd" checked onchange="setCountdown(5)"><span>5 detik</span></label>
+                    <label class="chip"><input type="radio" name="cd" onchange="setCountdown(10)"><span>10 detik</span></label>
+                </div>
+            </div>
+
+            <div class="option-group">
+                <div class="option-label">Cara memotret</div>
+                <div class="chips">
+                    <label class="chip"><input type="radio" name="cm" checked onchange="setCaptureMode('auto')"><span>🤖 Otomatis</span></label>
+                    <label class="chip"><input type="radio" name="cm" onchange="setCaptureMode('manual')"><span>👆 Manual</span></label>
+                </div>
+            </div>
+            <div class="option-group">
+                <div class="option-label">Rekap GIF</div>
+                <div class="chips">
+                    <label class="chip"><input type="radio" name="rc" checked onchange="setRecap(true)"><span>🎞️ Aktif</span></label>
+                    <label class="chip"><input type="radio" name="rc" onchange="setRecap(false)"><span>Nonaktif</span></label>
+                </div>
             </div>
 
             <button class="btn-primary" onclick="startSession()">Mulai Sesi 📸</button>
+            <br>
+            <button class="btn-secondary" onclick="connectPrinterClick()">🔌 Hubungkan Printer</button>
         </div>
     </section>
 
-   <section id="screen-strip-select" class="screen">
-        <h2>Mau berapa foto?</h2>
+    <section id="screen-strip-select" class="screen">
+        <button class="btn-back" onclick="showScreen('screen-welcome')">← Kembali</button>
+        <h2>Pilih Gaya Foto</h2>
         <div class="template-options">
-            <div class="template-card" onclick="selectStripCount(1)">
-                <div class="mini-strip polaroid-strip">
-                    <div></div> </div>
-                <p>Polaroid (1 Foto)</p>
-            </div>
-
             <div class="template-card" onclick="selectStripCount(3)">
-                <div class="mini-strip three-strip">
-                    <div></div><div></div><div></div>
-                </div>
-                <p>3 Foto</p>
+                <div class="mini-strip"><div></div><div></div><div></div></div>
+                <p>Strip 3 Foto</p>
             </div>
-
             <div class="template-card" onclick="selectStripCount(4)">
-                <div class="mini-strip four-strip">
-                    <div></div><div></div><div></div><div></div>
-                </div>
-                <p>4 Foto</p>
+                <div class="mini-strip"><div></div><div></div><div></div><div></div></div>
+                <p>Strip 4 Foto</p>
+            </div>
+            <div class="template-card" onclick="selectPolaroid()">
+                <div class="mini-polaroid"><div></div></div>
+                <p>Polaroid 📷</p>
             </div>
         </div>
     </section>
 
     <section id="screen-template-choice" class="screen">
+        <button class="btn-back" onclick="showScreen('screen-strip-select')">← Kembali</button>
         <h2>Pilih Bingkai Foto</h2>
-        <p>Pilih desain bawaan atau upload sendiri</p>
-        
-        <div id="assets-gallery" class="gallery-container">
-            </div>
+        <p>Pilih desain bawaan, tanpa bingkai, atau upload sendiri</p>
 
-        <div class="divider" style="margin: 20px 0; color: #888;">--- Atau ---</div>
+        <div id="assets-gallery" class="gallery-container"></div>
 
-        <div class="custom-upload-area">
-            <label for="custom-frame-input" class="btn-secondary" style="cursor: pointer;">📤 Upload Frame Sendiri</label>
+        <div class="action-buttons">
+            <button class="btn-primary" onclick="noFrame()">Tanpa Bingkai ➡️</button>
+            <label for="custom-frame-input" class="btn-secondary" style="cursor:pointer;">📤 Upload Frame Sendiri</label>
             <input type="file" id="custom-frame-input" accept="image/png" style="display:none;" onchange="handleCustomUpload(this)">
         </div>
     </section>
@@ -86,9 +105,12 @@
         <div class="camera-container">
             <video id="video-feed" autoplay playsinline></video>
             <div class="crop-guide"></div>
+            <div id="rec-dot" class="rec-dot hidden">● REC</div>
+            <div id="flash" class="flash"></div>
             <div id="countdown-overlay" class="hidden">3</div>
         </div>
         <p id="photo-instruction">Bersiap...</p>
+        <button id="shutter-btn" class="btn-shutter hidden">📸<br>Jepret</button>
         <canvas id="photo-canvas" style="display:none;"></canvas>
     </section>
 
@@ -98,6 +120,11 @@
             <img id="preview-image" alt="Preview Strip">
         </div>
         
+        <div id="caption-box" class="caption-box hidden">
+            <label for="caption-input">✏️ Tulisan di foto <small>(strip: maks. 2 baris, Polaroid: 1 baris)</small></label>
+            <textarea id="caption-input" rows="2" maxlength="48" placeholder="Contoh: Bestie Forever" oninput="onCaptionInput()"></textarea>
+        </div>
+
         <div class="retake-section">
             <p>Klik foto kecil di bawah untuk mengulang satu per satu:</p>
             <div id="thumbnails-container" class="thumbnails-row"></div>
@@ -113,13 +140,26 @@
         <h2>Siap Dicetak!</h2>
         <p>Waktu tersisa: <span id="print-timer">03:00</span></p>
         
+        <div class="option-group" style="margin:0 0 8px">
+            <div class="option-label">Jumlah cetak</div>
+            <div class="chips">
+                <label class="chip"><input type="radio" name="copies" value="1" checked onchange="setCopies(1)"><span>1x</span></label>
+                <label class="chip"><input type="radio" name="copies" value="2" onchange="setCopies(2)"><span>2x</span></label>
+                <label class="chip"><input type="radio" name="copies" value="3" onchange="setCopies(3)"><span>3x</span></label>
+            </div>
+        </div>
         <div class="print-preview-area">
             <img id="final-image" alt="Final Strip">
+        </div>
+        <div id="recap-box" class="recap-box hidden">
+            <div id="recap-status">⏳ Membuat rekap GIF...</div>
+            <img id="recap-img" class="hidden" alt="Rekap GIF">
+            <button id="recap-dl" class="btn-secondary hidden" onclick="downloadRecap()">Unduh GIF ⬇️</button>
         </div>
 
         <div class="action-buttons">
             <button class="btn-secondary" onclick="downloadImage()">Unduh ⬇️</button>
-            <button class="btn-primary" onclick="printImage()">Cetak 🖨️</button>
+            <button id="btn-print" class="btn-primary" onclick="printImage()">Cetak 🖨️</button>
         </div>
         <button class="btn-text" onclick="finishSession()">Selesai</button>
     </section>
